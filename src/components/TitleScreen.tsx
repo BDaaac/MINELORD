@@ -14,15 +14,13 @@ const logo = String.raw`
 
 export function TitleScreen({
   onStart,
-  onHowTo,
-  onArsenal,
+  onScreenChange,
   bestRound,
   muted,
   onAudioToggle,
 }: {
   onStart: () => void;
-  onHowTo: () => void;
-  onArsenal: () => void;
+  onScreenChange: (screen: "how-to-play" | "arsenal") => void;
   bestRound: number;
   muted: boolean;
   onAudioToggle: () => void;
@@ -34,22 +32,21 @@ export function TitleScreen({
       <TerminalFrame title="> MINELORD v1.0" action={<AudioToggle muted={muted} onToggle={onAudioToggle} />}>
         <div className="menu-container">
           <pre className="ascii-logo">{typed}</pre>
-          <p className="tagline">"Think like a Sapper. Play like a Villain."</p>
+          <p className="tagline">"Думай как сапёр. Играй как злодей."</p>
           <div className="menu-stack">
             <button className="terminal-button terminal-button--primary" onClick={onStart}>
-              <Play size={18} /> START GAME
+              <Play size={18} /> НАЧАТЬ ИГРУ
             </button>
-            <button className="terminal-button" onClick={onHowTo}>
-              <Terminal size={18} /> HOW TO PLAY
+            <button className="terminal-button" onClick={() => onScreenChange("how-to-play")}>
+              <Terminal size={18} /> КАК ИГРАТЬ
             </button>
-            <button className="terminal-button" onClick={onArsenal}>
-              <Settings size={18} /> ARSENAL
+            <button className="terminal-button" onClick={() => onScreenChange("arsenal")}>
+              <Settings size={18} /> АРСЕНАЛ
             </button>
-            <button className="terminal-button" type="button" aria-label={`Leaderboard best round ${bestRound}`}>
-              <Star size={18} /> LEADERBOARD
+            <button className="terminal-button" type="button" aria-label={`Leaderboard best round ${bestRound}`} disabled>
+              <Star size={18} /> ЛИДЕРБОРД
             </button>
           </div>
-          <p className="prompt-line">&gt; awaiting command<span className="cursor">_</span></p>
         </div>
       </TerminalFrame>
     </main>

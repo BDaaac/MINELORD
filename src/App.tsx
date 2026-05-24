@@ -38,29 +38,38 @@ export function App() {
   useInterval(
     () => {
       if (state.screen !== "running" || state.result || state.paused || state.confirmMenu) return;
+
       const sapper = state.sappers.find((item) => item.alive && !item.reached);
       if (!sapper) return;
 
       if (state.config.ai === "The Machine") {
         if (machineBusy.current) return;
+
         machineBusy.current = true;
         const snapshot = state;
+
         void requestMachineMove(snapshot.gemini, snapshot.board, snapshot.defuse, sapper, snapshot.mines)
           .then((result) => {
             const coord = parseCellName(result.move.cell);
+
             setState((current) => {
-              if (current.screen !== "running" || current.result || current.paused || current.confirmMenu) return current;
+              if (current.screen !== "running" || current.result || current.paused || current.confirmMenu) {
+                return current;
+              }
+
               const updated = {
                 ...current,
                 gemini: result.settings,
                 machineThoughts: [...current.machineThoughts, ...result.thoughts].slice(-30),
               };
+
               return applyAiMove(updated, sapper.id, coord || undefined, result.move.reason);
             });
           })
           .finally(() => {
             machineBusy.current = false;
           });
+
         return;
       }
 
@@ -82,16 +91,20 @@ export function App() {
 
   if (state.screen === "title") {
     return (
-      <>
-        <TitleScreen
-          bestRound={state.stats.bestRound}
-          muted={audio.muted}
-          onAudioToggle={audio.toggleMuted}
-          onHowTo={() => setState((current) => ({ ...current, screen: "howto" }))}
-          onArsenal={() => setState((current) => ({ ...current, screen: "arsenal" }))}
-          onStart={startCampaign}
-        />
-      </>
+      <TitleScreen
+        bestRound={state.stats.bestRound}
+        muted={audio.muted}
+        onAudioToggle={audio.toggleMuted}
+        onScreenChange={(screen) => {
+          if (screen === "how-to-play") {
+            setState((current) => ({ ...current, screen: "howto" }));
+            return;
+          }
+
+          setState((current) => ({ ...current, screen }));
+        }}
+        onStart={startCampaign}
+      />
     );
   }
 
@@ -158,7 +171,13 @@ export function App() {
         <AudioToggle muted={audio.muted} onToggle={audio.toggleMuted} />
         <RunningScreen
           state={state}
-          onPauseToggle={() => setState((current) => ({ ...current, paused: !current.paused, confirmMenu: false }))}
+          onPauseToggle={() =>
+            setState((current) => ({
+              ...current,
+              paused: !current.paused,
+              confirmMenu: false,
+            }))
+          }
           onMenuAsk={() =>
             setState((current) => ({
               ...current,
@@ -168,8 +187,19 @@ export function App() {
             }))
           }
           onMenuConfirm={() => setState(createInitialGame())}
-          onMenuCancel={() => setState((current) => ({ ...current, confirmMenu: false, paused: false }))}
-          onViewToggle={() => setState((current) => ({ ...current, sapperView: !current.sapperView }))}
+          onMenuCancel={() =>
+            setState((current) => ({
+              ...current,
+              confirmMenu: false,
+              paused: false,
+            }))
+          }
+          onViewToggle={() =>
+            setState((current) => ({
+              ...current,
+              sapperView: !current.sapperView,
+            }))
+          }
           onGiveUp={() =>
             setState((current) => ({
               ...current,
