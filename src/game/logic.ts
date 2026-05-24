@@ -430,9 +430,19 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
   const visited = new Set(sapper.visitedCells);
   const forcedCell = forcedMove && inBounds(state.config.size, forcedMove) ? state.board[forcedMove.row][forcedMove.col] : null;
   const forcedIsDefuse = forcedMove?.row === state.defuse.row && forcedMove.col === state.defuse.col;
+  const allowedForcedKeys = new Set(
+    orthogonalNeighbors(state.config.size, sapper.row, sapper.col)
+      .concat([
+        { row: sapper.row + Math.sign(state.defuse.row - sapper.row), col: sapper.col },
+        { row: sapper.row, col: sapper.col + Math.sign(state.defuse.col - sapper.col) },
+      ])
+      .filter((coord) => inBounds(state.config.size, coord))
+      .map((coord) => coordKey(coord)),
+  );
   const canUseForced =
     forcedMove &&
     forcedCell &&
+    allowedForcedKeys.has(coordKey(forcedMove)) &&
     !visited.has(coordKey(forcedMove)) &&
     (!forcedCell.revealed || forcedIsDefuse);
   const move = canUseForced ? forcedMove : chooseAiMove(state, sapper);

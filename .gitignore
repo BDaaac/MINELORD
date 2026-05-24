@@ -3,3 +3,6 @@ dist/
 *.tsbuildinfo
 vite.stdout.log
 vite.stderr.log
+.env
+.env.local
+.env.*.local

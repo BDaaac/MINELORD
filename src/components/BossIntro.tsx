@@ -16,14 +16,14 @@ const quotes: Record<AiType, string> = {
 
 const bossAbilities: Partial<Record<AiType, string[]>> = {
   "The Colonel": ["SCAN", "УГЛОВАЯ ТАКТИКА"],
-  "The Ghost":   ["PHASE", "MEMORY"],
+  "The Ghost": ["PHASE", "MEMORY"],
   "The Machine": ["OVERCALCULATE", "ADAPT", "GEMINI THINKING"],
 };
 
 const bossWeakness: Partial<Record<AiType, string>> = {
-  "The Colonel": "боится центра поля — загони в угол",
-  "The Ghost":   "меняй паттерн каждый раунд",
-  "The Machine": "Phantom + Mirror скрывают информацию от логики",
+  "The Colonel": "боится центра поля — загоняй в угол",
+  "The Ghost": "меняй паттерн каждый раунд",
+  "The Machine": "Phantom и Mirror скрывают информацию от логики",
 };
 
 export function BossIntro({ ai, onContinue }: { ai: AiType; onContinue: () => void }) {
@@ -32,9 +32,9 @@ export function BossIntro({ ai, onContinue }: { ai: AiType; onContinue: () => vo
 
   return (
     <main className="screen boss-entry-screen">
-      <TerminalFrame title="> ⚠ THREAT DETECTED" danger>
+      <TerminalFrame title="> ОБНАРУЖЕН БОСС" danger>
         <div className="boss-intro">
-          <p className="boss-warning">&gt; ⚠ THREAT DETECTED</p>
+          <p className="boss-warning">&gt; BOSS DETECTED</p>
           <div className="boss-name-block">
             <div className="boss-name-bar">████████████████████████</div>
             <h1>{ai}</h1>
@@ -42,13 +42,11 @@ export function BossIntro({ ai, onContinue }: { ai: AiType; onContinue: () => vo
           </div>
           {quotes[ai] ? <p className="boss-quote">"{quotes[ai]}"</p> : null}
           <div className="ability-row">
-            {abilities.map((ab) => <span key={ab}>{ab}</span>)}
+            {abilities.map((ability) => <span key={ability}>{ability}</span>)}
           </div>
-          {weakness ? (
-            <p className="boss-weakness">&gt; WEAKNESS: {weakness}</p>
-          ) : null}
+          {weakness ? <p className="boss-weakness">&gt; СЛАБОСТЬ: {weakness}</p> : null}
           <button className="terminal-button terminal-button--danger" onClick={onContinue}>
-            <Play size={18} /> PREPARE YOUR MINES
+            <Play size={18} /> ПОДГОТОВИТЬ МИНЫ
           </button>
         </div>
       </TerminalFrame>

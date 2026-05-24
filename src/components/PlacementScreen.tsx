@@ -19,17 +19,36 @@ export function PlacementScreen({
   const canStart = state.mines.filter((mine) => mine.type !== "decoy").length > 0;
   const mineTypes = unlockedMines(state.config.round);
   if (state.selectedDirective === "decoy") mineTypes.push("decoy");
+
   const synergy = SYNERGIES.find(
     (item) => item.directive === state.selectedDirective && state.mines.some((mine) => mine.type === item.mine),
   );
 
   return (
     <main className="screen game-layout">
-      <TerminalFrame title={`ROUND ${state.config.round} — MINES: ${state.mines.length}/${totalMineLimit(state)}`}>
-        <div className="hud-row">
-          <span>DIRECTIVE: [{state.selectedDirective ? DIRECTIVES[state.selectedDirective].name : "---"}]</span>
+      <TerminalFrame title={`РАУНД ${state.config.round} - ФАЗА РАССТАНОВКИ`}>
+        <div className="status-strip">
+          <div className="status-chip">
+            <span className="status-chip__label">МИНЫ</span>
+            <strong>{state.mines.length}/{totalMineLimit(state)}</strong>
+          </div>
+          <div className="status-chip">
+            <span className="status-chip__label">ДИРЕКТИВА</span>
+            <strong>{state.selectedDirective ? DIRECTIVES[state.selectedDirective].name : "---"}</strong>
+          </div>
+          <div className="status-chip">
+            <span className="status-chip__label">ЦЕЛЬ</span>
+            <strong>ЗАЩИТИТЬ [★]</strong>
+          </div>
         </div>
-        {synergy ? <div className="synergy-line">&gt; [SYNERGY] {synergy.name}: {synergy.text}</div> : null}
+
+        {synergy ? <div className="synergy-line">&gt; [СИНЕРГИЯ] {synergy.name}: {synergy.text}</div> : null}
+
+        <div className="placement-summary">
+          <span>Выбери тип мины и расставь ловушки так, чтобы сапер не дошел до [★].</span>
+          <span>Выбрано: {MINE_DEFS[state.selectedMine].glyph} {MINE_DEFS[state.selectedMine].name}</span>
+        </div>
+
         <div className="mine-palette">
           {mineTypes.map((type) => {
             const def = MINE_DEFS[type];
@@ -48,6 +67,7 @@ export function PlacementScreen({
             );
           })}
         </div>
+
         <Board
           board={state.board}
           mines={state.mines}
@@ -56,10 +76,11 @@ export function PlacementScreen({
           phase="placement"
           onCellClick={onCellClick}
         />
+
         <div className="footer-help">
-          <span>ЛКМ = поставить/убрать выбранную мину: {MINE_DEFS[state.selectedMine].name}</span>
+          <span>Тап по клетке: поставить или убрать {MINE_DEFS[state.selectedMine].name}</span>
           <button className="terminal-button terminal-button--primary" disabled={!canStart} onClick={onStart}>
-            <Play size={18} /> READY — START MISSION
+            <Play size={18} /> ЗАПУСТИТЬ САПЕРА
           </button>
         </div>
       </TerminalFrame>

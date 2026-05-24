@@ -16,7 +16,8 @@ export function DirectiveSelect({
 
   return (
     <main className="screen">
-      <TerminalFrame title={`> ROUND ${round} — SELECT DIRECTIVE`}>
+      <TerminalFrame title={`> РАУНД ${round} - ВЫБОР ДИРЕКТИВЫ`}>
+        <div className="timer-chip">&gt; Ожидаю подтверждение директивы...</div>
         <div className="directive-grid">
           {choices.map((id) => {
             const directive = DIRECTIVES[id];
@@ -27,7 +28,7 @@ export function DirectiveSelect({
                 onClick={() => setSelected(id)}
               >
                 <strong>██ DIRECTIVE #{directive.serial}</strong>
-                <span className="directive-rule">───────────────────</span>
+                <span className="directive-rule">-------------------</span>
                 <span className="directive-name">{directive.name}</span>
                 <span>{directive.description}</span>
                 <small>CLASSIFICATION: TOP SECRET</small>
@@ -41,7 +42,7 @@ export function DirectiveSelect({
             disabled={!selected}
             onClick={() => selected && onPick(selected)}
           >
-            ✓ CONFIRM DIRECTIVE{selected ? `: ${DIRECTIVES[selected].name}` : ""}
+            ПРИНЯТЬ ДИРЕКТИВУ{selected ? `: ${DIRECTIVES[selected].name}` : ""}
           </button>
         </div>
       </TerminalFrame>

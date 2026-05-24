@@ -1,5 +1,4 @@
 import { Play, Settings, Terminal } from "lucide-react";
-import { useTypewriter } from "../hooks/useTypewriter";
 import { AudioToggle } from "./AudioToggle";
 import { MatrixRain } from "./MatrixRain";
 import { TerminalFrame } from "./TerminalFrame";
@@ -28,13 +27,11 @@ export function TitleScreen({
   muted: boolean;
   onAudioToggle: () => void;
 }) {
-  const typed = useTypewriter(logo, 18);
-
   return (
     <main className="screen title-screen">
       <MatrixRain />
       <TerminalFrame title="> MINELORD v1.0" action={<AudioToggle muted={muted} onToggle={onAudioToggle} />}>
-        <pre className="ascii-logo">{typed}</pre>
+        <pre className="ascii-logo">{logo}</pre>
         <div className="menu-stack">
           <button className="terminal-button terminal-button--primary" onClick={onStart}>
             <Play size={18} /> НАЧАТЬ ИГРУ

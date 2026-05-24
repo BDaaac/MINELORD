@@ -9,7 +9,7 @@ export function TerminalFrame({
   return (
     <section className={`terminal-frame ${danger ? "terminal-frame--danger" : ""}`}>
       {action ? <div className="terminal-frame-action">{action}</div> : null}
-      {title ? <div className="terminal-title">╔══ {title} ══╗</div> : null}
+      {title ? <div className="terminal-title">{title}</div> : null}
       {children}
     </section>
   );

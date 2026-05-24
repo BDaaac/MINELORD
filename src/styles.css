@@ -409,6 +409,41 @@ button {
   color: var(--yellow);
 }
 
+.status-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.status-chip {
+  border: 1px solid var(--dark-green);
+  background: rgba(0, 14, 0, 0.78);
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.status-chip strong {
+  color: var(--yellow);
+  font-size: 22px;
+}
+
+.status-chip__label {
+  color: var(--cyan);
+  font-size: 16px;
+  letter-spacing: 0.08em;
+}
+
+.placement-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+  color: #8fffb0;
+}
+
 .result-debrief {
   width: min(100%, 720px);
   margin: 4px 0 8px;
@@ -1054,6 +1089,10 @@ button {
   .briefing-grid,
   .run-grid,
   .directive-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .status-strip {
     grid-template-columns: 1fr;
   }
 
