@@ -1,7 +1,7 @@
 import { AiType, Directive, DirectiveId, Inventory, MineDef, MineType, RoundConfig } from "./types";
 
-export const MODEL_OPTIONS = ["gemini-3.1-flash", "gemini-3.1-flash-lite-preview", "gemini-3-flash-preview", "gemini-2.5-flash"];
-export const DEFAULT_MODEL = "gemini-3.1-flash";
+export const MODEL_OPTIONS = ["gemini-2.5-flash", "gemini-3.1-flash-lite-preview", "gemini-2.0-flash", "gemini-2.5-pro"];
+export const DEFAULT_MODEL = "gemini-2.5-flash";
 
 export const ROUND_TABLE: RoundConfig[] = [
   { round: 1, sappers: 1, size: 6, mines: 3, ai: "Rookie" },

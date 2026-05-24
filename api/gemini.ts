@@ -45,7 +45,7 @@ export default async function handler(req: any, res: any) {
 
   const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
   const prompt = String(body?.prompt || "");
-  const model = String(body?.model || process.env.GEMINI_MODEL || "gemini-3.1-flash");
+  const model = String(body?.model || process.env.GEMINI_MODEL || "gemini-2.5-flash");
 
   for (let attempt = 0; attempt < keys.length; attempt += 1) {
     const keyIndex = currentKeyIndex % keys.length;

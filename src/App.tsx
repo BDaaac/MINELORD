@@ -112,7 +112,9 @@ export function App() {
         };
       });
     },
-    state.screen === "running" && !state.paused && !state.confirmMenu ? 1200 : null,
+    state.screen === "running" && !state.paused && !state.confirmMenu
+      ? (state.selectedDirective === "overclock" ? 600 : 1200)
+      : null,
   );
 
   useInterval(

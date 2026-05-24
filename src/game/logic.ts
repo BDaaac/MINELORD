@@ -90,8 +90,8 @@ export function getRound(index: number): RoundConfig {
   };
 }
 
-export function createBoard(size: number, mines: Mine[]) {
-  return Array.from({ length: size }, (_, row) =>
+export function createBoard(size: number, mines: Mine[], directive?: DirectiveId) {
+  const board = Array.from({ length: size }, (_, row) =>
     Array.from({ length: size }, (_, col): Cell => {
       const adjacent = neighbors(size, row, col);
       const real = adjacent.filter((n) => {
@@ -106,16 +106,36 @@ export function createBoard(size: number, mines: Mine[]) {
       const decoyBoost = adjacent.filter((n) =>
         mines.some((mine) => mine.row === n.row && mine.col === n.col && mine.type === "decoy"),
       ).length;
+      // CLUSTER: center zone shows +1 (confuses AI about danger density)
+      const clusterBoost =
+        directive === "cluster" && row >= 1 && row <= size - 2 && col >= 1 && col <= size - 2 ? 1 : 0;
       return {
         row,
         col,
         revealed: false,
         value: real + decoyBoost,
-        displayValue: Math.max(0, real + decoyBoost - mirrorPenalty),
+        displayValue: Math.max(0, real + decoyBoost - mirrorPenalty + clusterBoost),
         exploded: false,
       };
     }),
   );
+  // MIMIC: highest-value non-mine cell becomes invisible (shows 0)
+  if (directive === "mimic" && mines.length > 0) {
+    let maxVal = 0;
+    let mr = -1;
+    let mc = -1;
+    for (const row of board) {
+      for (const cell of row) {
+        if (!mines.some((m) => m.row === cell.row && m.col === cell.col) && cell.displayValue > maxVal) {
+          maxVal = cell.displayValue;
+          mr = cell.row;
+          mc = cell.col;
+        }
+      }
+    }
+    if (mr >= 0) board[mr][mc] = { ...board[mr][mc], displayValue: 0 };
+  }
+  return board;
 }
 
 export function randomDefuse(size: number): Coord {
@@ -195,8 +215,12 @@ function sapLog(sapper: Sapper, msg: string): string {
   return `САПЁР [${sapper.nickname}]: ${msg}`;
 }
 
+// saboteur и swap требуют UI-взаимодействия — не реализованы
+const UNIMPLEMENTED_DIRECTIVES = new Set<DirectiveId>(["saboteur", "swap"]);
+
 export function directiveChoices(deck: DirectiveId[]) {
-  const unique = Array.from(new Set(deck.length ? deck : Object.keys(DIRECTIVES) as DirectiveId[]));
+  const unique = Array.from(new Set(deck.length ? deck : Object.keys(DIRECTIVES) as DirectiveId[]))
+    .filter((id) => !UNIMPLEMENTED_DIRECTIVES.has(id));
   return shuffle(unique).slice(0, Math.min(3, unique.length));
 }
 
@@ -274,7 +298,7 @@ export function setupRound(state: GameState, roundIndex: number): GameState {
       directiveDeck,
       directiveDiscard: state.inventory.directiveDeck.length ? state.inventory.directiveDiscard : [],
     },
-    timer: config.round === 1 ? 10 : 10,
+    timer: state.inventory.placementSeconds,
     result: null,
     log: [`> ROUND ${config.round}: ${config.ai}. Выберите джокер.`],
     stats: { ...state.stats, earnedThisRound: 0, explosions: 0, speedKills: 0 },
@@ -298,6 +322,7 @@ export function beginPlacement(state: GameState, directive: DirectiveId): GameSt
     ...state,
     screen: state.config.boss ? "boss" : "placement",
     selectedDirective: directive,
+    board: createBoard(state.config.size, state.mines, directive),
     inventory: { ...state.inventory, directiveDeck: deck, directiveDiscard: discard },
     timer: state.inventory.placementSeconds,
     log: [`> DIRECTIVE ACCEPTED. MISSION BEGINS.`, `> ${DIRECTIVES[directive].name} armed.`],
@@ -328,7 +353,7 @@ export function startRunning(state: GameState): GameState {
   return {
     ...state,
     screen: "running",
-    board: createBoard(state.config.size, state.mines),
+    board: createBoard(state.config.size, state.mines, state.selectedDirective),
     paused: false,
     confirmMenu: false,
     pendingAiMove: undefined,
@@ -381,7 +406,7 @@ export function toggleMine(state: GameState, row: number, col: number): GameStat
       { id: `${state.selectedMine}-${Date.now()}-${row}-${col}`, row, col, type: state.selectedMine },
     ];
   }
-  return { ...state, mines, board: createBoard(state.config.size, mines) };
+  return { ...state, mines, board: createBoard(state.config.size, mines, state.selectedDirective) };
 }
 
 export function mineAt(mines: Mine[], row: number, col: number) {
@@ -483,7 +508,14 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
     const sappers = state.sappers.map((item) =>
       item.id === sapperId ? { ...item, stuck: item.stuck - 1, steps: item.steps + 1 } : item,
     );
-    return { ...state, sappers, log: appendLog(state.log, `> ${sapLog(sapper, "заблокирован... жду.")}`)} ;
+    return { ...state, sappers, log: appendLog(state.log, `> ${sapLog(sapper, "заблокирован... жду.")}`) };
+  }
+  // PARANOIA: каждый 3-й шаг AI теряет ориентир и пропускает ход
+  if (state.selectedDirective === "paranoia" && (sapper.steps + 1) % 3 === 0) {
+    const sappers = state.sappers.map((item) =>
+      item.id === sapperId ? { ...item, steps: item.steps + 1 } : item,
+    );
+    return { ...state, sappers, log: appendLog(state.log, `> ${sapLog(sapper, "PARANOIA: теряю ориентир. Замираю.")}`) };
   }
 
   const visited = new Set(sapper.visitedCells);
@@ -674,6 +706,34 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
   }
 
   if (move.row === state.defuse.row && move.col === state.defuse.col && target.alive) {
+    // LAST STAND: 40% шанс взрыва прямо у Defuse Point
+    if (state.selectedDirective === "lastStand" && Math.random() < 0.4) {
+      target.alive = false;
+      nextBoard[move.row][move.col].exploded = true;
+      flash = true;
+      const earned = 4;
+      stats = { ...stats, coins: stats.coins + earned, earnedThisRound: stats.earnedThisRound + earned, explosions: stats.explosions + 1 };
+      logs.push(`> ⚡ LAST STAND! ${sapLog(sapper, `ловушка у ${cellLabel}! Уничтожен. +${earned} монет`)}`);
+      awardAchievement("first_blood");
+      localStorage.setItem("minelord-kills", String(Number(localStorage.getItem("minelord-kills") || "0") + 1));
+      const surviving = nextSappers.filter((item) => item.alive && !item.reached);
+      if (surviving.length === 0) {
+        awardAchievement("clean_sweep");
+        if (state.config.ai === "The Colonel") awardAchievement("colonel_down");
+        if (state.config.ai === "The Ghost") awardAchievement("ghost_down");
+        if (state.config.ai === "The Machine") awardAchievement("machine_down");
+        const cleanSweep = 2;
+        const bestRound = Math.max(stats.bestRound, state.config.round);
+        localStorage.setItem("minelord-best", String(bestRound));
+        return {
+          ...state, board: nextBoard, mines: nextMines, sappers: nextSappers, flash,
+          stats: { ...stats, coins: stats.coins + cleanSweep, earnedThisRound: stats.earnedThisRound + cleanSweep, survivedRounds: Math.max(stats.survivedRounds, state.config.round), bestRound },
+          result: "win", screen: "result",
+          log: appendLog(logs, `> CLEAN SWEEP. +${cleanSweep} монет`),
+        };
+      }
+      return { ...state, board: nextBoard, mines: nextMines, sappers: nextSappers, stats, flash, log: appendLog(logs) };
+    }
     target.reached = true;
     logs.push(`> ${fmtPhrase(pickPhrase(MOVE_PHRASES.defuse), { cell: cellLabel })}`);
     localStorage.setItem("minelord-games", String(Number(localStorage.getItem("minelord-games") || "0") + 1));
