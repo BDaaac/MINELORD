@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useState } from "react";
 import { DIRECTIVES } from "../game/data";
 import { DirectiveId } from "../game/types";
 import { TerminalFrame } from "./TerminalFrame";
@@ -6,29 +6,26 @@ import { TerminalFrame } from "./TerminalFrame";
 export function DirectiveSelect({
   round,
   choices,
-  timer,
   onPick,
 }: {
   round: number;
   choices: DirectiveId[];
-  timer: number;
   onPick: (directive: DirectiveId) => void;
 }) {
-  useEffect(() => {
-    if (timer <= 0 && choices.length) onPick(choices[Math.floor(Math.random() * choices.length)]);
-  }, [timer, choices, onPick]);
+  const [selected, setSelected] = useState<DirectiveId | null>(null);
 
   return (
     <main className="screen">
       <TerminalFrame title={`> ROUND ${round} — SELECT DIRECTIVE`}>
-        <div className={`timer-chip ${timer < 5 ? "timer-chip--danger" : ""}`}>
-          &gt; Awaiting directive confirmation... {timer}s
-        </div>
         <div className="directive-grid">
           {choices.map((id) => {
             const directive = DIRECTIVES[id];
             return (
-              <button className="directive-card" key={id} onClick={() => onPick(id)}>
+              <button
+                className={`directive-card ${selected === id ? "directive-card--selected" : ""}`}
+                key={id}
+                onClick={() => setSelected(id)}
+              >
                 <strong>██ DIRECTIVE #{directive.serial}</strong>
                 <span className="directive-rule">───────────────────</span>
                 <span className="directive-name">{directive.name}</span>
@@ -37,6 +34,15 @@ export function DirectiveSelect({
               </button>
             );
           })}
+        </div>
+        <div className="directive-confirm-row">
+          <button
+            className="terminal-button terminal-button--primary"
+            disabled={!selected}
+            onClick={() => selected && onPick(selected)}
+          >
+            ✓ CONFIRM DIRECTIVE{selected ? `: ${DIRECTIVES[selected].name}` : ""}
+          </button>
         </div>
       </TerminalFrame>
     </main>

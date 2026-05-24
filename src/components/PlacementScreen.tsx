@@ -25,10 +25,9 @@ export function PlacementScreen({
 
   return (
     <main className="screen game-layout">
-      <TerminalFrame title={`ROUND ${state.config.round} — MINES: ${state.mines.length}/${totalMineLimit(state)} — TIME: ${state.timer}s`}>
+      <TerminalFrame title={`ROUND ${state.config.round} — MINES: ${state.mines.length}/${totalMineLimit(state)}`}>
         <div className="hud-row">
           <span>DIRECTIVE: [{state.selectedDirective ? DIRECTIVES[state.selectedDirective].name : "---"}]</span>
-          <span className={state.timer < 5 ? "danger-text blink" : ""}>TIME: {state.timer}s</span>
         </div>
         {synergy ? <div className="synergy-line">&gt; [SYNERGY] {synergy.name}: {synergy.text}</div> : null}
         <div className="mine-palette">
@@ -60,7 +59,7 @@ export function PlacementScreen({
         <div className="footer-help">
           <span>ЛКМ = поставить/убрать выбранную мину: {MINE_DEFS[state.selectedMine].name}</span>
           <button className="terminal-button terminal-button--primary" disabled={!canStart} onClick={onStart}>
-            <Play size={18} /> START AI
+            <Play size={18} /> READY — START MISSION
           </button>
         </div>
       </TerminalFrame>

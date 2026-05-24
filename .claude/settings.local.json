@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Димаш\\\\Desktop\\\\it\\\\hacktone\\\\games\\\\src\" -Recurse | ForEach-Object { $_.FullName })",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

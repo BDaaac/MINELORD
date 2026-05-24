@@ -1,4 +1,4 @@
-import { DEFAULT_MODEL, DIRECTIVES, initialInventory, MINE_DEFS, ROUND_TABLE } from "./data";
+import { BOSS_NICKNAMES, DEFAULT_MODEL, DIRECTIVES, initialInventory, MINE_DEFS, MOVE_PHRASES, ROUND_TABLE, SAPPER_NICKNAMES } from "./data";
 import {
   AiType,
   Cell,
@@ -91,17 +91,32 @@ export function randomDefuse(size: number): Coord {
 }
 
 export function createSappers(config: RoundConfig): Sapper[] {
+  const size = config.size;
+  const usedCells = new Set<string>();
+  const edgeCells = {
+    top:    Array.from({ length: size }, (_, col) => ({ row: 0,        col })),
+    bottom: Array.from({ length: size }, (_, col) => ({ row: size - 1, col })),
+    left:   Array.from({ length: size }, (_, row) => ({ row, col: 0        })),
+    right:  Array.from({ length: size }, (_, row) => ({ row, col: size - 1 })),
+  } as const;
+  const edgeOrder = shuffle(["top", "bottom", "left", "right"] as const);
+  const bossNick = BOSS_NICKNAMES[config.ai];
+  const nickPool = shuffle([...SAPPER_NICKNAMES]);
+
   return Array.from({ length: config.sappers }, (_, index) => {
-    const starts: Coord[] = [
-      { row: 0, col: 0 },
-      { row: config.size - 1, col: 0 },
-      { row: 0, col: config.size - 1 },
-      { row: config.size - 1, col: config.size - 1 },
-    ];
-    const start = starts[index % starts.length];
+    const edge = edgeOrder[index % edgeOrder.length];
+    const available = edgeCells[edge].filter((c) => !usedCells.has(coordKey(c)));
+    const allEdge = (["top", "bottom", "left", "right"] as const)
+      .flatMap((e) => edgeCells[e])
+      .filter((c) => !usedCells.has(coordKey(c)));
+    const pool = available.length ? available : allEdge;
+    const start = shuffle(pool)[0] ?? { row: 0, col: 0 };
+    usedCells.add(coordKey(start));
+    const nickname = bossNick ?? (nickPool[index] || `АГЕНТ-${index + 1}`);
     return {
       id: `sapper-${index + 1}`,
       name: `SAPPER_${String(index + 1).padStart(2, "0")}`,
+      nickname,
       row: start.row,
       col: start.col,
       alive: true,
@@ -119,17 +134,31 @@ export function shuffle<T>(items: T[]) {
   return [...items].sort(() => Math.random() - 0.5);
 }
 
+function pickPhrase(pool: string[]): string {
+  return pool[Math.floor(Math.random() * pool.length)] || "";
+}
+
+function fmtPhrase(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? key));
+}
+
+function sapLog(sapper: Sapper, msg: string): string {
+  return `САПЁР [${sapper.nickname}]: ${msg}`;
+}
+
 export function directiveChoices(deck: DirectiveId[]) {
   const unique = Array.from(new Set(deck.length ? deck : Object.keys(DIRECTIVES) as DirectiveId[]));
   return shuffle(unique).slice(0, Math.min(3, unique.length));
 }
 
 export function createInitialGame(): GameState {
+  const isFirstTime = !localStorage.getItem("minelord-visited");
+  if (isFirstTime) localStorage.setItem("minelord-visited", "1");
   const config = getRound(0);
   const defuse = randomDefuse(config.size);
   const mines: Mine[] = [];
   return {
-    screen: "title",
+    screen: isFirstTime ? "howto" : "title",
     roundIndex: 0,
     config,
     board: createBoard(config.size, mines),
@@ -222,6 +251,10 @@ export function afterBossIntro(state: GameState): GameState {
 }
 
 export function startRunning(state: GameState): GameState {
+  const breachLogs = state.sappers.map((s) => {
+    const phrase = fmtPhrase(pickPhrase(MOVE_PHRASES.spawn), { cell: cellName(s.row, s.col) });
+    return `> ${sapLog(s, phrase)}`;
+  });
   return {
     ...state,
     screen: "running",
@@ -231,6 +264,7 @@ export function startRunning(state: GameState): GameState {
     log: [
       `> ${state.config.ai}: запуск маршрута к ${cellName(state.defuse.row, state.defuse.col)}.`,
       state.config.ai === "The Machine" ? `> ${state.gemini.model} connected...` : "> AI анализирует поле...",
+      ...breachLogs,
     ],
   };
 }
@@ -370,13 +404,13 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
   if (!sapper || !sapper.alive || sapper.reached || state.result) return state;
   const maxMoves = state.config.size * state.config.size * 2;
   if (sapper.steps >= maxMoves) {
-    return eliminateSapperAsStuck(state, sapperId, `> ${sapper.name}: maxMoves=${maxMoves}. Сапер зациклился и проиграл.`);
+    return eliminateSapperAsStuck(state, sapperId, `> ${sapLog(sapper, "нет выхода. Зациклился — отступаю.")} (шаг ${sapper.steps})`);
   }
   if (sapper.stuck > 0) {
     const sappers = state.sappers.map((item) =>
       item.id === sapperId ? { ...item, stuck: item.stuck - 1, steps: item.steps + 1 } : item,
     );
-    return { ...state, sappers, log: appendLog(state.log, `> ${sapper.name}: застрял в Sticky-паутине...`) };
+    return { ...state, sappers, log: appendLog(state.log, `> ${sapLog(sapper, "заблокирован... жду.")}`)} ;
   }
 
   const visited = new Set(sapper.visitedCells);
@@ -389,11 +423,12 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
     (!forcedCell.revealed || forcedIsDefuse);
   const move = canUseForced ? forcedMove : chooseAiMove(state, sapper);
   if (!move) {
-    return eliminateSapperAsStuck(state, sapperId, `> ${sapper.name}: доступных клеток нет. Сапер застрял.`);
+    return eliminateSapperAsStuck(state, sapperId, `> ${sapLog(sapper, "доступных клеток нет. Отступаю.")}`);
   }
   const mine = mineAt(state.mines, move.row, move.col);
   const cellLabel = cellName(move.row, move.col);
   const nextBoard = state.board.map((row) => row.map((cell) => ({ ...cell })));
+  let nextMines = [...state.mines];
   const nextSappers = state.sappers.map((item) => ({ ...item }));
   const target = nextSappers.find((item) => item.id === sapperId)!;
   target.row = move.row;
@@ -402,8 +437,11 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
   target.visitedCells = new Set([...target.visitedCells, coordKey(move)]);
 
   const logs = [...state.log];
-  if (reason) logs.push(`> ${sapper.name}: ${cellLabel} — ${reason}`);
-  else logs.push(`> ${sapper.name}: открываю [${cellLabel}]...`);
+  const thinkPool = MOVE_PHRASES.think[sapper.type as string] ?? MOVE_PHRASES.think["Rookie"];
+  logs.push(`> ${sapLog(sapper, pickPhrase(thinkPool))}`);
+  if (reason) {
+    logs.push(`> ${sapLog(sapper, `${cellLabel} — ${reason}`)}`);
+  }
 
   let stats = state.stats;
   let flash = false;
@@ -411,6 +449,45 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
     if (mine.type === "sticky" && target.stuck === 0) {
       target.stuck = 2;
       logs.push(`> ${cellLabel}: Sticky активирована. Сапер теряет 2 хода.`);
+    } else if (mine.type === "timer" && mine.armedAtStep === undefined) {
+      nextMines = nextMines.map((m) => m.id === mine.id ? { ...m, armedAtStep: target.steps + 5 } : m);
+      logs.push(`> ${cellLabel}: ⏱️ TIMER вооружена. Взрыв через 5 ходов!`);
+    } else if (mine.type === "vortex") {
+      const unvisited = state.board.flat().filter(
+        (cell) =>
+          !target.visitedCells.has(coordKey(cell)) &&
+          !cell.revealed &&
+          !(cell.row === state.defuse.row && cell.col === state.defuse.col) &&
+          !mineAt(nextMines, cell.row, cell.col),
+      );
+      const dest = shuffle(unvisited)[0];
+      if (dest) {
+        target.row = dest.row;
+        target.col = dest.col;
+        logs.push(`> ${cellLabel}: 🌀 VORTEX! Сапер телепортирован на ${cellName(dest.row, dest.col)}.`);
+      }
+      nextMines = nextMines.filter((m) => m.id !== mine.id);
+    } else if (mine.type === "watcher") {
+      const tempSapper = { ...target, visitedCells: new Set(target.visitedCells) };
+      const predicted: string[] = [];
+      let tempState: GameState = { ...state, sappers: [tempSapper], mines: nextMines, board: nextBoard };
+      for (let i = 0; i < 2; i++) {
+        const nextMove = chooseAiMove(tempState, tempSapper);
+        if (nextMove) {
+          predicted.push(cellName(nextMove.row, nextMove.col));
+          tempSapper.visitedCells = new Set([...tempSapper.visitedCells, coordKey(nextMove)]);
+          tempSapper.row = nextMove.row;
+          tempSapper.col = nextMove.col;
+          tempState = { ...tempState, sappers: [tempSapper] };
+        }
+      }
+      logs.push(`> ${cellLabel}: 👁️ WATCHER! Следующий маршрут: ${predicted.join(" → ") || "неизвестно"}`);
+      nextMines = nextMines.filter((m) => m.id !== mine.id);
+      nextBoard[move.row][move.col].revealed = true;
+    } else if (mine.type === "lock") {
+      target.stuck = 2;
+      logs.push(`> ${cellLabel}: 🔒 LOCK! Сапер заблокирован на 2 хода.`);
+      nextMines = nextMines.filter((m) => m.id !== mine.id);
     } else if (state.config.ai === "The Ghost" && !target.phased) {
       target.phased = true;
       logs.push(`> ${target.name}: PHASE. Мина проигнорирована один раз.`);
@@ -431,19 +508,75 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
         explosions: stats.explosions + 1 + chainBonus,
         speedKills: stats.speedKills + speedKill,
       };
-      logs.push(`> ${cellLabel}: * * BOOM * * ${target.name} уничтожен. +${earned} монет`);
+      logs.push(`> ${fmtPhrase(pickPhrase(MOVE_PHRASES.explosion), { cell: cellLabel })} +${earned} монет`);
+      localStorage.setItem("minelord-kills", String(Number(localStorage.getItem("minelord-kills") || "0") + 1 + chainBonus));
     }
   } else {
     nextBoard[move.row][move.col].revealed = true;
-    logs.push(`> ${cellLabel}: безопасно. value = ${nextBoard[move.row][move.col].displayValue}`);
+    const val = nextBoard[move.row][move.col].displayValue;
+    if (val > 0) {
+      logs.push(`> ${sapLog(sapper, fmtPhrase(pickPhrase(MOVE_PHRASES.number), { cell: cellLabel, n: val }))}`);
+    } else {
+      logs.push(`> ${sapLog(sapper, fmtPhrase(pickPhrase(MOVE_PHRASES.safe), { cell: cellLabel }))}`);
+    }
+  }
+
+  if (target.alive) {
+    const adjacentSkull = nextMines.find(
+      (m) =>
+        m.type === "skull" &&
+        !(m.row === move.row && m.col === move.col) &&
+        Math.abs(target.row - m.row) <= 1 &&
+        Math.abs(target.col - m.col) <= 1,
+    );
+    if (adjacentSkull) {
+      const nbs = neighbors(state.config.size, adjacentSkull.row, adjacentSkull.col);
+      const triggerMine = nbs
+        .map((coord) => mineAt(nextMines, coord.row, coord.col))
+        .find((m) => m && m.type !== "skull" && m.type !== "decoy" && m.type !== "vortex" && m.type !== "watcher" && m.type !== "timer");
+      if (triggerMine) {
+        target.alive = false;
+        nextBoard[triggerMine.row][triggerMine.col].exploded = true;
+        flash = true;
+        const earned = 3;
+        stats = { ...stats, coins: stats.coins + earned, earnedThisRound: stats.earnedThisRound + earned, explosions: stats.explosions + 1 };
+        logs.push(`> 💀 SKULL ${cellName(adjacentSkull.row, adjacentSkull.col)}: мина ${cellName(triggerMine.row, triggerMine.col)} активирована. ${target.name} уничтожен. +${earned} монет`);
+        nextMines = nextMines.filter((m) => m.id !== adjacentSkull.id && m.id !== triggerMine.id);
+      } else {
+        logs.push(`> 💀 SKULL ${cellName(adjacentSkull.row, adjacentSkull.col)}: рядом нет доступных мин.`);
+        nextMines = nextMines.filter((m) => m.id !== adjacentSkull.id);
+      }
+    }
+  }
+
+  if (target.alive) {
+    const firingTimer = nextMines.find(
+      (m) => m.type === "timer" && m.armedAtStep !== undefined && target.steps >= m.armedAtStep,
+    );
+    if (firingTimer) {
+      nextBoard[firingTimer.row][firingTimer.col].exploded = true;
+      const dist = Math.abs(target.row - firingTimer.row) + Math.abs(target.col - firingTimer.col);
+      if (dist <= 2) {
+        target.alive = false;
+        flash = true;
+        const earned = 3;
+        stats = { ...stats, coins: stats.coins + earned, earnedThisRound: stats.earnedThisRound + earned, explosions: stats.explosions + 1 };
+        logs.push(`> ⏱️ TIMER ${cellName(firingTimer.row, firingTimer.col)} взорвалась! ${target.name} в зоне. +${earned} монет`);
+      } else {
+        logs.push(`> ⏱️ TIMER ${cellName(firingTimer.row, firingTimer.col)} взорвалась. Сапер вне зоны.`);
+      }
+      nextMines = nextMines.filter((m) => m.id !== firingTimer.id);
+    }
   }
 
   if (move.row === state.defuse.row && move.col === state.defuse.col && target.alive) {
     target.reached = true;
-    logs.push(`> ${target.name}: DEFUSE POINT достигнут. MISSION FAILED.`);
+    logs.push(`> ${fmtPhrase(pickPhrase(MOVE_PHRASES.defuse), { cell: cellLabel })}`);
+    localStorage.setItem("minelord-games", String(Number(localStorage.getItem("minelord-games") || "0") + 1));
     return {
       ...state,
       board: nextBoard,
+      mines: nextMines,
       sappers: nextSappers,
       stats,
       flash,
@@ -462,6 +595,7 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
     return {
       ...state,
       board: nextBoard,
+      mines: nextMines,
       sappers: nextSappers,
       stats: {
         ...stats,
@@ -477,7 +611,7 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
     };
   }
 
-  return { ...state, board: nextBoard, sappers: nextSappers, stats, flash, log: appendLog(logs) };
+  return { ...state, board: nextBoard, mines: nextMines, sappers: nextSappers, stats, flash, log: appendLog(logs) };
 }
 
 export function appendLog(log: string[], line?: string) {

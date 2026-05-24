@@ -76,6 +76,7 @@ export interface Cell {
 export interface Sapper {
   id: string;
   name: string;
+  nickname: string;
   row: number;
   col: number;
   alive: boolean;

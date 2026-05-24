@@ -37,20 +37,6 @@ export function App() {
 
   useInterval(
     () => {
-      setState((current) => {
-        if (current.screen !== "directive" && current.screen !== "placement") return current;
-        if (current.timer <= 0) {
-          if (current.screen === "placement") return startRunning(current);
-          return current;
-        }
-        return { ...current, timer: current.timer - 1 };
-      });
-    },
-    state.screen === "directive" || state.screen === "placement" ? 1000 : null,
-  );
-
-  useInterval(
-    () => {
       if (state.screen !== "running" || state.result || state.paused || state.confirmMenu) return;
       const sapper = state.sappers.find((item) => item.alive && !item.reached);
       if (!sapper) return;
@@ -97,7 +83,6 @@ export function App() {
   if (state.screen === "title") {
     return (
       <>
-        <AudioToggle muted={audio.muted} onToggle={audio.toggleMuted} />
         <TitleScreen
           bestRound={state.stats.bestRound}
           muted={audio.muted}
@@ -138,7 +123,6 @@ export function App() {
         <DirectiveSelect
           choices={state.directiveChoices}
           round={state.config.round}
-          timer={state.timer}
           onPick={(directive) => setState((current) => beginPlacement(current, directive))}
         />
       </>

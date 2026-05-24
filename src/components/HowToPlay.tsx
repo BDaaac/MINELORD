@@ -1,19 +1,26 @@
-import { Bomb, CircleDot, Hash, Play } from "lucide-react";
+import { Play } from "lucide-react";
 import { TerminalFrame } from "./TerminalFrame";
 
 export function HowToPlay({ onStart, onBack }: { onStart: () => void; onBack: () => void }) {
   return (
     <main className="screen">
       <TerminalFrame title="> MISSION BRIEFING">
-        <div className="briefing-grid">
-          <div>
-            <p className="big-line">Ты — минёр. Не сапёр.</p>
-            <ul className="terminal-list">
-              <li><Bomb size={18} /> обычная мина уничтожает сапёра</li>
-              <li><CircleDot size={18} /> Defuse Point — цель врага</li>
-              <li><Hash size={18} /> число показывает мины рядом</li>
-            </ul>
-            <p>Один сапёр = одна жизнь. Одна мина может выиграть раунд.</p>
+        <div className="howto-body">
+          <p className="big-line">Ты — минёр. Не сапёр.</p>
+          <div className="howto-divider">─────────────────────────────────</div>
+          <p>Расставь мины на поле до старта.</p>
+          <p>AI-сапёр будет искать путь к [★].</p>
+          <p>Одна мина = одна смерть сапёра.</p>
+          <p>Убей всех сапёров — победишь раунд.</p>
+          <div className="howto-divider">─────────────────────────────────</div>
+          <p className="howto-warn">&gt; Сапёры появляются с краёв поля.</p>
+          <p className="howto-warn">&gt; Откуда — узнаешь только когда они придут.</p>
+          <div className="howto-divider">─────────────────────────────────</div>
+          <div className="howto-legend">
+            <span><span className="howto-glyph">💣</span> обычная мина уничтожает сапёра</span>
+            <span><span className="howto-glyph">[★]</span> Defuse Point — цель врага</span>
+            <span><span className="howto-glyph">[ 3 ]</span> = 3 мины рядом с этой клеткой</span>
+            <span><span className="howto-glyph">[■]</span> закрытая клетка в SAPPER VIEW</span>
           </div>
           <div className="mini-demo">
             <span className="walker">&gt;_</span>
