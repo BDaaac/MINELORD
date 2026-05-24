@@ -23,14 +23,21 @@ export function RunningScreen({
 }) {
   return (
     <main className={`screen game-layout ${state.flash ? "screen-flash" : ""}`}>
-      <TerminalFrame title={`ROUND ${state.config.round} — SAPPERS: ${state.sappers.filter((s) => s.alive).length} alive`}>
+      <TerminalFrame title={`РАУНД ${state.config.round} - ЖИВЫХ САПЕРОВ: ${state.sappers.filter((s) => s.alive).length}`}>
         <div className="run-grid">
           <div>
-            <Board board={state.board} mines={state.mines} defuse={state.defuse} sappers={state.sappers} phase="running" sapperView={state.sapperView} />
-            <div className="legend-line">&gt; ROUND {state.config.round} — SAPPER IS SEARCHING...</div>
+            <Board
+              board={state.board}
+              mines={state.mines}
+              defuse={state.defuse}
+              sappers={state.sappers}
+              phase="running"
+              sapperView={state.sapperView}
+            />
+            <div className="legend-line">&gt; РАУНД {state.config.round} - САПЕР ВЕДЕТ ПОИСК...</div>
           </div>
           <aside className="ai-panel">
-            <div className="panel-heading"><Bot size={18} /> AI LOG</div>
+            <div className="panel-heading"><Bot size={18} /> ЖУРНАЛ AI</div>
             {state.config.ai === "The Machine" ? (
               <div className="gemini-status">
                 <div><KeyRound size={16} /> {activeGeminiKeyLabel(state.gemini.activeKeyIndex)} active</div>
@@ -49,17 +56,17 @@ export function RunningScreen({
           </aside>
         </div>
         <div className="run-controls">
-          <button className="run-control-button" type="button" onClick={onPauseToggle}>
-            [ {state.paused ? "RESUME" : "PAUSE"} ]
+            <button className="run-control-button" type="button" onClick={onPauseToggle}>
+            [ {state.paused ? "ПРОДОЛЖИТЬ" : "ПАУЗА"} ]
           </button>
           <button className="run-control-button" type="button" onClick={onViewToggle}>
-            [ {state.sapperView ? "MY VIEW" : "SAPPER VIEW"} ]
+            [ {state.sapperView ? "МОЙ ВИД" : "ВИД САПЕРА"} ]
           </button>
           <button className="run-control-button" type="button" onClick={onMenuAsk}>
-            [ MENU ]
+            [ МЕНЮ ]
           </button>
           <button className="run-control-button" type="button" onClick={onGiveUp}>
-            [ GIVE UP ]
+            [ СДАТЬСЯ ]
           </button>
         </div>
         {state.confirmMenu ? (

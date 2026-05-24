@@ -121,16 +121,19 @@ button {
 }
 
 .ascii-logo {
-  min-height: 150px;
+  min-height: 168px;
   margin: 0 auto;
   color: var(--green);
-  font-size: clamp(10px, 1.62vw, 18px);
-  line-height: 1.1;
+  font-size: clamp(9px, 1.16vw, 16px);
+  line-height: 1.12;
   white-space: pre-wrap;
   text-align: center;
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  word-break: keep-all;
+  overflow-wrap: normal;
 }
 
 .tagline,
@@ -404,6 +407,30 @@ button {
 
 .result-value {
   color: var(--yellow);
+}
+
+.result-debrief {
+  width: min(100%, 720px);
+  margin: 4px 0 8px;
+  border: 1px solid var(--dark-green);
+  background: rgba(0, 10, 0, 0.78);
+  padding: 12px;
+  text-align: left;
+}
+
+.result-debrief__title {
+  color: var(--cyan);
+  margin-bottom: 8px;
+}
+
+.result-debrief__log {
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 8px;
+}
+
+.result-debrief__log p {
+  margin: 4px 0;
 }
 
 /* ── HowToPlay ─────────────────────────────────────────── */
@@ -1017,6 +1044,13 @@ button {
     padding: 14px;
   }
 
+  .ascii-logo {
+    min-height: auto;
+    font-size: clamp(7px, 2vw, 10px);
+    line-height: 1.08;
+    text-align: left;
+  }
+
   .briefing-grid,
   .run-grid,
   .directive-grid {
@@ -1038,6 +1072,10 @@ button {
 
   .board {
     --cell-size: clamp(30px, calc(88vw / var(--board-size)), 52px);
+  }
+
+  .result-debrief {
+    width: 100%;
   }
 
   .audio-toggle {

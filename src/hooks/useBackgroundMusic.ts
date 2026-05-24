@@ -23,6 +23,7 @@ export function useBackgroundMusic(screen: Screen, result: PhaseResult) {
 
   useEffect(() => {
     const audio = new Audio("/assets/audio/background.m4a");
+    audio.preload = "auto";
     audio.loop = true;
     audio.volume = DEFAULT_VOLUME;
     audio.muted = muted;
@@ -48,6 +49,15 @@ export function useBackgroundMusic(screen: Screen, result: PhaseResult) {
   const playAfterInteraction = useCallback(() => {
     const audio = audioRef.current;
     if (!audio || userArmedRef.current) return;
+    userArmedRef.current = true;
+    if (!muted && result !== "lose") {
+      void audio.play().catch(() => undefined);
+    }
+  }, [muted, result]);
+
+  const armAndPlay = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
     userArmedRef.current = true;
     if (!muted && result !== "lose") {
       void audio.play().catch(() => undefined);
@@ -107,5 +117,5 @@ export function useBackgroundMusic(screen: Screen, result: PhaseResult) {
     });
   }, [result]);
 
-  return { muted, toggleMuted };
+  return { muted, toggleMuted, armAndPlay };
 }

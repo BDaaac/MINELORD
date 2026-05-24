@@ -2,9 +2,19 @@ import { Cell, Coord, GeminiSettings, MachineMove, Mine, Sapper } from "./types"
 import { cellName, coordKey, parseCellName } from "./logic";
 
 const GEMINI_KEYS = [
-  "ТВОЙ_КЛЮЧ_1",
-  "ТВОЙ_КЛЮЧ_2",
-  "ТВОЙ_КЛЮЧ_3",
+  "AIzaSyCwlGOjLkDFq25uJ4Bi305x2irxwQmL21g",
+  "AIzaSyDajSjnMOBV6Q0Ki88LkFiSDqMsL-A-ICw",
+  "AIzaSyAVduvmeZUhM__nXArnjcE3c84TaxJwQ2E",
+  "AIzaSyBabCxgxvshuHf9aeKLj3PPNq-s_3t-p2E",
+  "AIzaSyAS-7MM8mqY39lMgBn0r2fwwQh7adZQpxo",
+  "AIzaSyDUH8uD-opAHEhqzubaUtuA_PwgBPPsY6w",
+  "AIzaSyAQvYlMLmx0OLnMqIO7smxoeQsDdkSYlvE",
+  "AIzaSyDD6yyxvTBpMjoZbkK8-3-xSuItEQaOfv8",
+  "AIzaSyD_KR3X42YbKM0gMwbDcAi5Q_OpcnklPvk",
+  "AIzaSyC9Cqkg26cWnz-OGoqJSmEIi8XuLoegab8",
+  "AIzaSyAW2KWPXV-Fs5SXL8risq28UtyHIK-UaIM",
+  "AIzaSyD1OwwnzHKNrk7mXqXKpezwq8VGIlTupLg",
+  "AIzaSyBlj5z9mtDSKvyjv3L5X27PCG1ZpkadQoA",
 ];
 
 let currentKeyIndex = 0;
@@ -25,13 +35,13 @@ function buildPrompt(board: Cell[][], defuse: Coord, sapper: Sapper) {
     .flat()
     .filter((cell) => !cell.revealed && !visited.has(coordKey(cell)))
     .map((cell) => cellName(cell.row, cell.col));
-  return `Ты сапёр-эксперт. Поле ${board.length}x${board.length}.
-Текущая позиция сапёра: ${cellName(sapper.row, sapper.col)}.
-Открытые клетки с цифрами: ${opened.length ? opened.join(", ") : "нет"}.
-Закрытые непосещённые клетки: ${closed.join(", ")}.
-Defuse Point находится на: ${cellName(defuse.row, defuse.col)}.
-Какую закрытую клетку открыть следующей?
-Ответь строго JSON без markdown: {"cell":"D4","reason":"вероятность мины низкая"}`;
+  return `You are an expert sapper on a ${board.length}x${board.length} board.
+Current sapper position: ${cellName(sapper.row, sapper.col)}.
+Opened cells with numbers: ${opened.length ? opened.join(", ") : "none"}.
+Closed unvisited cells: ${closed.join(", ")}.
+Defuse Point is at: ${cellName(defuse.row, defuse.col)}.
+Choose exactly one next closed cell to open.
+Return strict JSON only: {"cell":"D4","reason":"short sentence"}`;
 }
 
 function extractJson(text: string): MachineMove | null {
@@ -65,7 +75,7 @@ function localFallbackMove(board: Cell[][], defuse: Coord, sapper: Sapper, mines
   const pick = candidates[0]?.cell;
   return {
     cell: pick ? cellName(pick.row, pick.col) : cellName(sapper.row, sapper.col),
-    reason: "локальный fallback выбрал непосещённую клетку с минимальным риском",
+    reason: "local fallback selected the lowest-risk unvisited cell",
   };
 }
 
@@ -83,18 +93,8 @@ export async function requestMachineMove(
   sapper: Sapper,
   mines: Mine[],
 ): Promise<GeminiMoveResult> {
-  const thoughts: string[] = [`> ${settings.model}: анализ поля ${board.length}x${board.length}...`];
-  const usableKeys = GEMINI_KEYS.filter((key) => !key.startsWith("ТВОЙ_КЛЮЧ"));
-
-  if (!usableKeys.length) {
-    const move = localFallbackMove(board, defuse, sapper, mines);
-    return {
-      move,
-      usedFallback: true,
-      thoughts: [...thoughts, "> Gemini keys не настроены в src/game/gemini.ts. SYSTEM FALLBACK.", `> ${move.cell}: ${move.reason}`],
-      settings: { ...settings, status: "Gemini keys missing. Local fallback active." },
-    };
-  }
+  const thoughts: string[] = [`> ${settings.model}: analyzing ${board.length}x${board.length} board...`];
+  const usableKeys = Array.from(new Set(GEMINI_KEYS.map((key) => key.trim()).filter(Boolean)));
 
   for (let i = 0; i < usableKeys.length; i += 1) {
     const keyIndex = currentKeyIndex % usableKeys.length;
@@ -153,7 +153,7 @@ export async function requestMachineMove(
   return {
     move,
     usedFallback: true,
-    thoughts: [...thoughts, "> Все Gemini ключи исчерпаны. SYSTEM FALLBACK.", `> ${move.cell}: ${move.reason}`],
+    thoughts: [...thoughts, "> All Gemini keys failed. SYSTEM FALLBACK.", `> ${move.cell}: ${move.reason}`],
     settings: {
       ...settings,
       activeKeyIndex: currentKeyIndex % Math.max(1, usableKeys.length),

@@ -32,8 +32,9 @@ export function App() {
   const audio = useBackgroundMusic(state.screen, state.result);
 
   const startCampaign = useCallback(() => {
+    audio.armAndPlay();
     setState((current) => setupRound(current, 0));
-  }, []);
+  }, [audio]);
 
   useInterval(
     () => {
@@ -92,16 +93,15 @@ export function App() {
   if (state.screen === "title") {
     return (
       <TitleScreen
-        bestRound={state.stats.bestRound}
         muted={audio.muted}
         onAudioToggle={audio.toggleMuted}
-        onScreenChange={(screen) => {
-          if (screen === "how-to-play") {
-            setState((current) => ({ ...current, screen: "howto" }));
-            return;
-          }
-
-          setState((current) => ({ ...current, screen }));
+        onHowTo={() => {
+          audio.armAndPlay();
+          setState((current) => ({ ...current, screen: "howto" }));
+        }}
+        onArsenal={() => {
+          audio.armAndPlay();
+          setState((current) => ({ ...current, screen: "arsenal" }));
         }}
         onStart={startCampaign}
       />
@@ -113,7 +113,10 @@ export function App() {
       <>
         <AudioToggle muted={audio.muted} onToggle={audio.toggleMuted} />
         <HowToPlay
-          onBack={() => setState((current) => ({ ...current, screen: "title" }))}
+          onBack={() => {
+            audio.armAndPlay();
+            setState((current) => ({ ...current, screen: "title" }));
+          }}
           onStart={startCampaign}
         />
       </>
@@ -124,7 +127,10 @@ export function App() {
     return (
       <>
         <AudioToggle muted={audio.muted} onToggle={audio.toggleMuted} />
-        <ArsenalScreen onBack={() => setState((current) => ({ ...current, screen: "title" }))} />
+        <ArsenalScreen onBack={() => {
+          audio.armAndPlay();
+          setState((current) => ({ ...current, screen: "title" }));
+        }} />
       </>
     );
   }
@@ -146,7 +152,10 @@ export function App() {
     return (
       <>
         <AudioToggle muted={audio.muted} onToggle={audio.toggleMuted} />
-        <BossIntro ai={state.config.ai} onContinue={() => setState(afterBossIntro)} />
+        <BossIntro ai={state.config.ai} onContinue={() => {
+          audio.armAndPlay();
+          setState(afterBossIntro);
+        }} />
       </>
     );
   }
@@ -159,7 +168,10 @@ export function App() {
           state={state}
           onCellClick={(row, col) => setState((current) => toggleMine(current, row, col))}
           onMineSelect={(type: MineType) => setState((current) => ({ ...current, selectedMine: type }))}
-          onStart={() => setState(startRunning)}
+          onStart={() => {
+            audio.armAndPlay();
+            setState(startRunning);
+          }}
         />
       </>
     );
@@ -222,7 +234,10 @@ export function App() {
         <ShopScreen
           state={state}
           onBuy={(id) => setState((current) => buyUpgrade(current, id))}
-          onContinue={() => setState((current) => setupRound(current, current.roundIndex + 1))}
+          onContinue={() => {
+            audio.armAndPlay();
+            setState((current) => setupRound(current, current.roundIndex + 1));
+          }}
         />
       </>
     );
@@ -234,7 +249,10 @@ export function App() {
       <ResultScreen
         state={state}
         onMenu={() => setState(createInitialGame())}
-        onNext={() => setState((current) => ({ ...current, screen: "shop" }))}
+        onNext={() => {
+          audio.armAndPlay();
+          setState((current) => ({ ...current, screen: "shop" }));
+        }}
         onRestart={() => setState(createInitialGame())}
       />
     </>

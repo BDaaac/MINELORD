@@ -1,4 +1,4 @@
-import { BOSS_NICKNAMES, DEFAULT_MODEL, DIRECTIVES, initialInventory, MINE_DEFS, MOVE_PHRASES, ROUND_TABLE, SAPPER_NICKNAMES } from "./data";
+import { BOSS_NICKNAMES, DEFAULT_MODEL, DIRECTIVES, initialInventory, MINE_DEFS, MOVE_PHRASES, ROUND_TABLE, SAPPER_NICKNAMES, SHOP_ITEMS } from "./data";
 import {
   AiType,
   Cell,
@@ -46,6 +46,15 @@ export function neighbors(size: number, row: number, col: number) {
   return cells;
 }
 
+export function orthogonalNeighbors(size: number, row: number, col: number) {
+  return [
+    { row: row - 1, col },
+    { row: row + 1, col },
+    { row, col: col - 1 },
+    { row, col: col + 1 },
+  ].filter((coord) => inBounds(size, coord));
+}
+
 export function getRound(index: number): RoundConfig {
   if (index < ROUND_TABLE.length) return ROUND_TABLE[index];
   const aiPool: AiType[] = ["Rookie+", "Analyst", "Gambler", "Hunter", "The Ghost"];
@@ -87,7 +96,12 @@ export function createBoard(size: number, mines: Mine[]) {
 }
 
 export function randomDefuse(size: number): Coord {
-  return { row: Math.floor(size / 2), col: size - 2 };
+  const min = size >= 5 ? 1 : 0;
+  const max = size >= 5 ? size - 2 : size - 1;
+  return {
+    row: min + Math.floor(Math.random() * (max - min + 1)),
+    col: min + Math.floor(Math.random() * (max - min + 1)),
+  };
 }
 
 export function createSappers(config: RoundConfig): Sapper[] {
@@ -357,7 +371,7 @@ function eliminateSapperAsStuck(state: GameState, sapperId: string, message: str
 
 export function chooseAiMove(state: GameState, sapper: Sapper): Coord | null {
   const size = state.config.size;
-  const candidates = neighbors(size, sapper.row, sapper.col)
+  const candidates = orthogonalNeighbors(size, sapper.row, sapper.col)
     .concat([
       { row: sapper.row + Math.sign(state.defuse.row - sapper.row), col: sapper.col },
       { row: sapper.row, col: sapper.col + Math.sign(state.defuse.col - sapper.col) },
@@ -619,25 +633,50 @@ export function appendLog(log: string[], line?: string) {
   return next.slice(-90);
 }
 
-export function buyUpgrade(state: GameState, id: string): GameState {
-  const itemPrice: Record<string, number> = {
-    normal: 2,
-    phantom: 4,
-    sticky: 3,
-    nova: 5,
-    mirror: 4,
-    directive: 3,
-    scout: 4,
-    time: 3,
-  };
-  const price = itemPrice[id] ?? 999;
-  if (state.stats.coins < price) return state;
-  const inventory = { ...state.inventory };
+function nextCampaignRound(state: GameState) {
+  return state.roundIndex + 2;
+}
+
+export function shopAvailableDirectiveIds(state: GameState) {
+  const owned = new Set<DirectiveId>([
+    ...state.inventory.directiveDeck,
+    ...state.inventory.directiveDiscard,
+    ...(state.selectedDirective ? [state.selectedDirective] : []),
+  ]);
+
+  return (Object.keys(DIRECTIVES) as DirectiveId[]).filter(
+    (directive) =>
+      DIRECTIVES[directive].purchasable &&
+      DIRECTIVES[directive].unlockRound <= nextCampaignRound(state) &&
+      !owned.has(directive),
+  );
+}
+
+export function canBuyUpgrade(state: GameState, id: string) {
+  const item = SHOP_ITEMS.find((entry) => entry.id === id);
+  if (!item || state.stats.coins < item.price) return false;
+
   if (id === "directive") {
-    const missing = (Object.keys(DIRECTIVES) as DirectiveId[]).filter(
-      (directive) => DIRECTIVES[directive].purchasable && !inventory.directiveDeck.includes(directive),
-    );
-    inventory.directiveDeck = [...inventory.directiveDeck, shuffle(missing)[0] || "blackout"];
+    return shopAvailableDirectiveIds(state).length > 0;
+  }
+
+  if (id in MINE_DEFS) {
+    return MINE_DEFS[id as MineType].unlockedRound <= nextCampaignRound(state);
+  }
+
+  return true;
+}
+
+export function buyUpgrade(state: GameState, id: string): GameState {
+  const item = SHOP_ITEMS.find((entry) => entry.id === id);
+  if (!item || !canBuyUpgrade(state, id)) return state;
+  const price = item.price;
+  const inventory = { ...state.inventory };
+
+  if (id === "directive") {
+    const missing = shopAvailableDirectiveIds(state);
+    if (!missing.length) return state;
+    inventory.directiveDeck = [...inventory.directiveDeck, shuffle(missing)[0]];
   } else if (id === "scout") {
     inventory.scout = true;
   } else if (id === "time") {
