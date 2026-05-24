@@ -2,6 +2,7 @@ export type Screen =
   | "title"
   | "howto"
   | "arsenal"
+  | "achievements"
   | "directive"
   | "boss"
   | "placement"
@@ -151,6 +152,33 @@ export interface GeminiSettings {
   status: string;
 }
 
+export interface PendingAiMove {
+  sapperId: string;
+  move?: Coord;
+  reason?: string;
+}
+
+export type ShopOfferRarity = "common" | "rare" | "forbidden";
+export type ShopOfferKind = "ordnance" | "classified" | "synergy" | "risk";
+
+export interface ShopOffer {
+  uid: string;
+  itemId: string;
+  label: string;
+  price: number;
+  rarity: ShopOfferRarity;
+  kind: ShopOfferKind;
+  note: string;
+}
+
+export interface UnlockState {
+  blackout: boolean;
+  doubleMine: boolean;
+  vortex: boolean;
+  ghostField: boolean;
+  forbiddenSlot: boolean;
+}
+
 export interface GameState {
   screen: Screen;
   roundIndex: number;
@@ -173,6 +201,10 @@ export interface GameState {
   paused: boolean;
   confirmMenu: boolean;
   sapperView: boolean;
+  pendingAiMove?: PendingAiMove;
+  shopOffers: ShopOffer[];
+  shopRerolls: number;
+  unlocks: UnlockState;
 }
 
 export interface MachineMove {

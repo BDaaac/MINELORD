@@ -1,6 +1,7 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { BossIntro } from "./components/BossIntro";
 import { AudioToggle } from "./components/AudioToggle";
+import { AchievementsScreen } from "./components/AchievementsScreen";
 import { ArsenalScreen } from "./components/ArsenalScreen";
 import { DirectiveSelect } from "./components/DirectiveSelect";
 import { HowToPlay } from "./components/HowToPlay";
@@ -18,7 +19,9 @@ import {
   beginPlacement,
   buyUpgrade,
   createInitialGame,
+  enterShop,
   parseCellName,
+  rerollShop,
   setupRound,
   startRunning,
   toggleMine,
@@ -29,7 +32,15 @@ import { useState } from "react";
 export function App() {
   const [state, setState] = useState(createInitialGame);
   const machineBusy = useRef(false);
+  const pendingMoveRef = useRef<{ sapperId: string; coord?: { row: number; col: number }; reason?: string } | null>(null);
   const audio = useBackgroundMusic(state.screen, state.result);
+
+  useEffect(() => {
+    if (state.screen !== "running") {
+      pendingMoveRef.current = null;
+      machineBusy.current = false;
+    }
+  }, [state.screen]);
 
   const startCampaign = useCallback(() => {
     audio.armAndPlay();
@@ -43,11 +54,22 @@ export function App() {
       const sapper = state.sappers.find((item) => item.alive && !item.reached);
       if (!sapper) return;
 
+      if (pendingMoveRef.current) {
+        const pending = pendingMoveRef.current;
+        pendingMoveRef.current = null;
+        setState((current) => applyAiMove(current, pending.sapperId, pending.coord, pending.reason));
+        return;
+      }
+
       if (state.config.ai === "The Machine") {
         if (machineBusy.current) return;
 
         machineBusy.current = true;
         const snapshot = state;
+        setState((current) => ({
+          ...current,
+          log: [...current.log, `> ${sapper.name}: анализирует маршрут...`].slice(-90),
+        }));
 
         void requestMachineMove(snapshot.gemini, snapshot.board, snapshot.defuse, sapper, snapshot.mines)
           .then((result) => {
@@ -64,7 +86,13 @@ export function App() {
                 machineThoughts: [...current.machineThoughts, ...result.thoughts].slice(-30),
               };
 
-              return applyAiMove(updated, sapper.id, coord || undefined, result.move.reason);
+              pendingMoveRef.current = {
+                sapperId: sapper.id,
+                coord: coord || undefined,
+                reason: result.move.reason,
+              };
+
+              return updated;
             });
           })
           .finally(() => {
@@ -76,10 +104,15 @@ export function App() {
 
       setState((current) => {
         const active = current.sappers.find((item) => item.alive && !item.reached);
-        return active ? applyAiMove(current, active.id) : current;
+        if (!active) return current;
+        pendingMoveRef.current = { sapperId: active.id };
+        return {
+          ...current,
+          log: [...current.log, `> ${active.name}: анализирует сектор...`].slice(-90),
+        };
       });
     },
-    state.screen === "running" && !state.paused && !state.confirmMenu ? 900 : null,
+    state.screen === "running" && !state.paused && !state.confirmMenu ? 1200 : null,
   );
 
   useInterval(
@@ -102,6 +135,10 @@ export function App() {
         onArsenal={() => {
           audio.armAndPlay();
           setState((current) => ({ ...current, screen: "arsenal" }));
+        }}
+        onAchievements={() => {
+          audio.armAndPlay();
+          setState((current) => ({ ...current, screen: "achievements" }));
         }}
         onStart={startCampaign}
       />
@@ -128,6 +165,18 @@ export function App() {
       <>
         <AudioToggle muted={audio.muted} onToggle={audio.toggleMuted} />
         <ArsenalScreen onBack={() => {
+          audio.armAndPlay();
+          setState((current) => ({ ...current, screen: "title" }));
+        }} />
+      </>
+    );
+  }
+
+  if (state.screen === "achievements") {
+    return (
+      <>
+        <AudioToggle muted={audio.muted} onToggle={audio.toggleMuted} />
+        <AchievementsScreen onBack={() => {
           audio.armAndPlay();
           setState((current) => ({ ...current, screen: "title" }));
         }} />
@@ -244,6 +293,7 @@ export function App() {
           state={state}
           onBack={() => setState((current) => ({ ...current, screen: "result" }))}
           onBuy={(id) => setState((current) => buyUpgrade(current, id))}
+          onReroll={() => setState((current) => rerollShop(current))}
           onContinue={() => {
             audio.armAndPlay();
             setState((current) => setupRound(current, current.roundIndex + 1));
@@ -261,7 +311,7 @@ export function App() {
         onMenu={() => setState(createInitialGame())}
         onNext={() => {
           audio.armAndPlay();
-          setState((current) => ({ ...current, screen: "shop" }));
+          setState((current) => enterShop(current));
         }}
         onRestart={() => setState(createInitialGame())}
       />

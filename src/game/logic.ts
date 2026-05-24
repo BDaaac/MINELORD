@@ -1,4 +1,5 @@
 import { BOSS_NICKNAMES, DEFAULT_MODEL, DIRECTIVES, initialInventory, MINE_DEFS, MOVE_PHRASES, ROUND_TABLE, SAPPER_NICKNAMES, SHOP_ITEMS } from "./data";
+import { awardAchievement, setAchievementProgress } from "./achievements";
 import {
   AiType,
   Cell,
@@ -9,12 +10,34 @@ import {
   MineType,
   RoundConfig,
   Sapper,
+  ShopOffer,
+  UnlockState,
 } from "./types";
 
 const dirs = [-1, 0, 1];
+const REROLL_COST = 2;
+
+const EMPTY_UNLOCKS: UnlockState = {
+  blackout: false,
+  doubleMine: false,
+  vortex: false,
+  ghostField: false,
+  forbiddenSlot: false,
+};
 
 export function coordKey(coord: Coord) {
   return `${coord.row}:${coord.col}`;
+}
+
+export function rerollShop(state: GameState): GameState {
+  if (state.stats.coins < REROLL_COST) return state;
+  return {
+    ...state,
+    shopRerolls: state.shopRerolls + 1,
+    shopOffers: generateShopOffers(state),
+    stats: { ...state.stats, coins: state.stats.coins - REROLL_COST },
+    log: appendLog(state.log, `> SUPPLY DEPOT: offers rerolled for ${REROLL_COST} credits.`),
+  };
 }
 
 export function cellName(row: number, col: number) {
@@ -152,6 +175,18 @@ function pickPhrase(pool: string[]): string {
   return pool[Math.floor(Math.random() * pool.length)] || "";
 }
 
+function readUnlocks(): UnlockState {
+  try {
+    return { ...EMPTY_UNLOCKS, ...JSON.parse(localStorage.getItem("minelord-unlocks") || "{}") };
+  } catch {
+    return { ...EMPTY_UNLOCKS };
+  }
+}
+
+function saveUnlocks(unlocks: UnlockState) {
+  localStorage.setItem("minelord-unlocks", JSON.stringify(unlocks));
+}
+
 function fmtPhrase(template: string, vars: Record<string, string | number>): string {
   return template.replace(/\{(\w+)\}/g, (_, key) => String(vars[key] ?? key));
 }
@@ -168,6 +203,7 @@ export function directiveChoices(deck: DirectiveId[]) {
 export function createInitialGame(): GameState {
   const isFirstTime = !localStorage.getItem("minelord-visited");
   if (isFirstTime) localStorage.setItem("minelord-visited", "1");
+  awardAchievement("boot_sequence");
   const config = getRound(0);
   const defuse = randomDefuse(config.size);
   const mines: Mine[] = [];
@@ -205,6 +241,10 @@ export function createInitialGame(): GameState {
     paused: false,
     confirmMenu: false,
     sapperView: false,
+    pendingAiMove: undefined,
+    shopOffers: [],
+    shopRerolls: 0,
+    unlocks: readUnlocks(),
   };
 }
 
@@ -243,11 +283,15 @@ export function setupRound(state: GameState, roundIndex: number): GameState {
     paused: false,
     confirmMenu: false,
     sapperView: false,
+    pendingAiMove: undefined,
+    shopOffers: [],
+    shopRerolls: 0,
   };
   return next;
 }
 
 export function beginPlacement(state: GameState, directive: DirectiveId): GameState {
+  awardAchievement("first_directive");
   const deck = state.inventory.directiveDeck.filter((id) => id !== directive);
   const discard = [...state.inventory.directiveDiscard, directive];
   return {
@@ -265,6 +309,18 @@ export function afterBossIntro(state: GameState): GameState {
 }
 
 export function startRunning(state: GameState): GameState {
+  const hasActiveSynergy = state.selectedDirective
+    ? state.mines.some((mine) =>
+        [
+          ["chain", "nova"],
+          ["blackout", "phantom"],
+          ["overclock", "timer"],
+          ["intel", "watcher"],
+          ["doubleMine", "skull"],
+        ].some(([directive, mineType]) => state.selectedDirective === directive && mine.type === mineType),
+      )
+    : false;
+  if (hasActiveSynergy) awardAchievement("synergy_online");
   const breachLogs = state.sappers.map((s) => {
     const phrase = fmtPhrase(pickPhrase(MOVE_PHRASES.spawn), { cell: cellName(s.row, s.col) });
     return `> ${sapLog(s, phrase)}`;
@@ -275,6 +331,7 @@ export function startRunning(state: GameState): GameState {
     board: createBoard(state.config.size, state.mines),
     paused: false,
     confirmMenu: false,
+    pendingAiMove: undefined,
     log: [
       `> ${state.config.ai}: запуск маршрута к ${cellName(state.defuse.row, state.defuse.col)}.`,
       state.config.ai === "The Machine" ? `> ${state.gemini.model} connected...` : "> AI анализирует поле...",
@@ -388,7 +445,9 @@ export function chooseAiMove(state: GameState, sapper: Sapper): Coord | null {
   const pool = available.length ? available : allClosedUnvisitedCells(state, sapper).map((cell) => ({ row: cell.row, col: cell.col }));
   if (!pool.length) return null;
   const foggy = state.selectedDirective === "fog" && sapper.steps < 5;
-  if (foggy || state.config.ai === "Rookie") return shuffle(pool)[0] || null;
+  const totalBlind = state.selectedDirective === "blackout" && hasMineAccess(state, "phantom") && sapper.steps < 3;
+  const ghostZero = state.selectedDirective === "ghostField" && sapper.steps < 4;
+  if (foggy || totalBlind || ghostZero || state.config.ai === "Rookie") return shuffle(pool)[0] || null;
 
   const scored = pool.map((coord) => {
     const cell = state.board[coord.row][coord.col];
@@ -474,8 +533,9 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
       target.stuck = 2;
       logs.push(`> ${cellLabel}: Sticky активирована. Сапер теряет 2 хода.`);
     } else if (mine.type === "timer" && mine.armedAtStep === undefined) {
-      nextMines = nextMines.map((m) => m.id === mine.id ? { ...m, armedAtStep: target.steps + 5 } : m);
-      logs.push(`> ${cellLabel}: ⏱️ TIMER вооружена. Взрыв через 5 ходов!`);
+      const fuse = state.selectedDirective === "overclock" ? 3 : 5;
+      nextMines = nextMines.map((m) => m.id === mine.id ? { ...m, armedAtStep: target.steps + fuse } : m);
+      logs.push(`> ${cellLabel}: TIMER armed. Detonation in ${fuse} AI moves!`);
     } else if (mine.type === "vortex") {
       const unvisited = state.board.flat().filter(
         (cell) =>
@@ -495,7 +555,8 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
       const tempSapper = { ...target, visitedCells: new Set(target.visitedCells) };
       const predicted: string[] = [];
       let tempState: GameState = { ...state, sappers: [tempSapper], mines: nextMines, board: nextBoard };
-      for (let i = 0; i < 2; i++) {
+      const lookahead = state.selectedDirective === "intel" ? 3 : 2;
+      for (let i = 0; i < lookahead; i++) {
         const nextMove = chooseAiMove(tempState, tempSapper);
         if (nextMove) {
           predicted.push(cellName(nextMove.row, nextMove.col));
@@ -519,9 +580,15 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
       target.alive = false;
       nextBoard[move.row][move.col].exploded = true;
       flash = true;
+      const chainRadius = state.selectedDirective === "chain" && mine.type === "nova" ? 2 : 1;
       const chainBonus =
         state.selectedDirective === "chain"
-          ? neighbors(state.config.size, move.row, move.col).filter((n) => mineAt(state.mines, n.row, n.col)).length
+          ? state.mines.filter(
+              (candidate) =>
+                candidate.id !== mine.id &&
+                candidate.type !== "decoy" &&
+                Math.max(Math.abs(candidate.row - move.row), Math.abs(candidate.col - move.col)) <= chainRadius,
+            ).length
           : 0;
       const speedKill = target.steps < 5 ? 1 : 0;
       const earned = 3 + speedKill * 2 + chainBonus;
@@ -534,6 +601,7 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
       };
       logs.push(`> ${fmtPhrase(pickPhrase(MOVE_PHRASES.explosion), { cell: cellLabel })} +${earned} монет`);
       localStorage.setItem("minelord-kills", String(Number(localStorage.getItem("minelord-kills") || "0") + 1 + chainBonus));
+      awardAchievement("first_blood");
     }
   } else {
     nextBoard[move.row][move.col].revealed = true;
@@ -554,21 +622,33 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
         Math.abs(target.col - m.col) <= 1,
     );
     if (adjacentSkull) {
+      if (state.selectedDirective === "doubleMine") {
+        target.alive = false;
+        nextBoard[target.row][target.col].exploded = true;
+        flash = true;
+        const earned = 5;
+        stats = { ...stats, coins: stats.coins + earned, earnedThisRound: stats.earnedThisRound + earned, explosions: stats.explosions + 1 };
+        logs.push(`> DEATH FIELD: SKULL ${cellName(adjacentSkull.row, adjacentSkull.col)} punished the bypass. ${target.name} eliminated. +${earned} credits`);
+        awardAchievement("first_blood");
+        nextMines = nextMines.filter((m) => m.id !== adjacentSkull.id);
+      } else {
       const nbs = neighbors(state.config.size, adjacentSkull.row, adjacentSkull.col);
       const triggerMine = nbs
         .map((coord) => mineAt(nextMines, coord.row, coord.col))
         .find((m) => m && m.type !== "skull" && m.type !== "decoy" && m.type !== "vortex" && m.type !== "watcher" && m.type !== "timer");
-      if (triggerMine) {
+    if (triggerMine) {
         target.alive = false;
         nextBoard[triggerMine.row][triggerMine.col].exploded = true;
         flash = true;
         const earned = 3;
         stats = { ...stats, coins: stats.coins + earned, earnedThisRound: stats.earnedThisRound + earned, explosions: stats.explosions + 1 };
         logs.push(`> 💀 SKULL ${cellName(adjacentSkull.row, adjacentSkull.col)}: мина ${cellName(triggerMine.row, triggerMine.col)} активирована. ${target.name} уничтожен. +${earned} монет`);
+        awardAchievement("first_blood");
         nextMines = nextMines.filter((m) => m.id !== adjacentSkull.id && m.id !== triggerMine.id);
       } else {
         logs.push(`> 💀 SKULL ${cellName(adjacentSkull.row, adjacentSkull.col)}: рядом нет доступных мин.`);
         nextMines = nextMines.filter((m) => m.id !== adjacentSkull.id);
+      }
       }
     }
   }
@@ -612,6 +692,10 @@ export function applyAiMove(state: GameState, sapperId: string, forcedMove?: Coo
 
   const living = nextSappers.filter((item) => item.alive && !item.reached);
   if (living.length === 0) {
+    awardAchievement("clean_sweep");
+    if (state.config.ai === "The Colonel") awardAchievement("colonel_down");
+    if (state.config.ai === "The Ghost") awardAchievement("ghost_down");
+    if (state.config.ai === "The Machine") awardAchievement("machine_down");
     const cleanSweep = 2;
     const survivedRounds = Math.max(state.stats.survivedRounds, state.config.round);
     const bestRound = Math.max(state.stats.bestRound, state.config.round);
@@ -647,6 +731,201 @@ function nextCampaignRound(state: GameState) {
   return state.roundIndex + 2;
 }
 
+function directiveShopId(id: DirectiveId) {
+  return `directive:${id}`;
+}
+
+function parseDirectiveShopId(id: string): DirectiveId | null {
+  if (!id.startsWith("directive:")) return null;
+  const directive = id.slice("directive:".length) as DirectiveId;
+  return directive in DIRECTIVES ? directive : null;
+}
+
+function hasMineAccess(state: GameState, type: MineType) {
+  if (type === "decoy") return false;
+  return (state.inventory[type] || 0) > 0 || state.mines.some((mine) => mine.type === type);
+}
+
+function unlockedMineOffer(state: GameState, type: MineType) {
+  if (type === "decoy") return false;
+  if (MINE_DEFS[type].unlockedRound > nextCampaignRound(state)) return false;
+  if (["vortex", "watcher", "lock", "skull"].includes(type)) return state.unlocks.vortex;
+  return true;
+}
+
+function unlockedDirectiveOffer(state: GameState, directive: DirectiveId) {
+  if (!DIRECTIVES[directive].purchasable) return false;
+  if (DIRECTIVES[directive].unlockRound > nextCampaignRound(state)) return false;
+  if (directive === "blackout") return state.unlocks.blackout;
+  if (directive === "doubleMine") return state.unlocks.doubleMine;
+  if (directive === "ghostField") return state.unlocks.ghostField;
+  return true;
+}
+
+function evaluateUnlocks(state: GameState) {
+  const kills = Number(localStorage.getItem("minelord-kills") || "0");
+  setAchievementProgress("classified_unlock", state.config.round >= 3 || kills >= 3 ? 0.75 : Math.min(0.6, state.config.round / 4));
+  setAchievementProgress("colonel_down", Math.min(0.99, state.config.round / 4));
+  setAchievementProgress("ghost_down", Math.min(0.99, state.config.round / 7));
+  setAchievementProgress("machine_down", Math.min(0.99, state.config.round / 9));
+  const next: UnlockState = {
+    ...state.unlocks,
+    blackout: state.unlocks.blackout || kills >= 3 || state.config.round >= 3,
+    doubleMine: state.unlocks.doubleMine || state.stats.explosions >= 2 || kills >= 6,
+    vortex: state.unlocks.vortex || state.config.round >= 4,
+    ghostField: state.unlocks.ghostField || state.config.round >= 6,
+    forbiddenSlot: state.unlocks.forbiddenSlot || state.config.round >= 7,
+  };
+  if (
+    (!state.unlocks.blackout && next.blackout) ||
+    (!state.unlocks.doubleMine && next.doubleMine) ||
+    (!state.unlocks.ghostField && next.ghostField)
+  ) {
+    awardAchievement("classified_unlock");
+  }
+  saveUnlocks(next);
+  return next;
+}
+
+function offerBase(id: string) {
+  const directive = parseDirectiveShopId(id);
+  if (directive) {
+    const def = DIRECTIVES[directive];
+    return {
+      label: `▣ ${def.name}`,
+      price: directive === "intel" || directive === "lastStand" ? 5 : 4,
+      note: def.description,
+    };
+  }
+
+  if (id === "time") return { label: "+5 seconds setup", price: 3, note: "Permanent extra placement time." };
+  if (id === "scout") return { label: "Scout route preview", price: 4, note: "Preview early sapper pressure before committing." };
+
+  const item = SHOP_ITEMS.find((entry) => entry.id === id);
+  if (item) return { label: item.label, price: item.price, note: id in MINE_DEFS ? MINE_DEFS[id as MineType].description : "" };
+  return { label: id, price: 3, note: "" };
+}
+
+function offerRarity(state: GameState, id: string): ShopOffer["rarity"] {
+  const directive = parseDirectiveShopId(id);
+  if (id === "time" || id === "scout") return "common";
+  if (directive && ["ghostField", "lastStand", "intel"].includes(directive)) return "forbidden";
+  if (id === "vortex" || id === "watcher" || id === "lock" || id === "skull") return "forbidden";
+  if (directive || id === "nova" || id === "timer" || id === "bait") return "rare";
+  return "common";
+}
+
+function offerKind(id: string): ShopOffer["kind"] {
+  const directive = parseDirectiveShopId(id);
+  if (id === "time" || id === "scout") return "classified";
+  if (directive) return ["chain", "blackout", "overclock", "intel", "doubleMine"].includes(directive) ? "synergy" : "classified";
+  if (id === "timer" || id === "skull" || id === "vortex") return "risk";
+  if (["nova", "phantom", "watcher"].includes(id)) return "synergy";
+  return "ordnance";
+}
+
+function shopPool(state: GameState) {
+  const mines = (Object.keys(MINE_DEFS) as MineType[])
+    .filter((type) => unlockedMineOffer(state, type))
+    .map((type) => type as string);
+  const directives = shopAvailableDirectiveIds(state)
+    .filter((id) => unlockedDirectiveOffer(state, id))
+    .map(directiveShopId);
+  const utility = state.inventory.scout ? ["time"] : ["time", "scout"];
+  return [...mines, ...directives, ...utility];
+}
+
+function synergyTargets(state: GameState) {
+  const targets = new Set<string>();
+  if (hasMineAccess(state, "nova")) targets.add(directiveShopId("chain"));
+  if (hasMineAccess(state, "phantom")) targets.add(directiveShopId("blackout"));
+  if (hasMineAccess(state, "timer")) targets.add(directiveShopId("overclock"));
+  if (hasMineAccess(state, "watcher")) targets.add(directiveShopId("intel"));
+  if (hasMineAccess(state, "skull")) targets.add(directiveShopId("doubleMine"));
+  if (state.inventory.directiveDeck.includes("chain") || state.inventory.directiveDiscard.includes("chain")) targets.add("nova");
+  if (state.inventory.directiveDeck.includes("blackout") || state.inventory.directiveDiscard.includes("blackout")) targets.add("phantom");
+  if (state.inventory.directiveDeck.includes("overclock") || state.inventory.directiveDiscard.includes("overclock")) targets.add("timer");
+  if (state.inventory.directiveDeck.includes("intel") || state.inventory.directiveDiscard.includes("intel")) targets.add("watcher");
+  if (state.inventory.directiveDeck.includes("doubleMine") || state.inventory.directiveDiscard.includes("doubleMine")) targets.add("skull");
+  return targets;
+}
+
+function weightedPick(ids: string[], state: GameState, picked: Set<string>) {
+  const synergy = synergyTargets(state);
+  const weighted = ids
+    .filter((id) => !picked.has(id))
+    .flatMap((id) => {
+      let weight = 4;
+      if (synergy.has(id)) weight += 9;
+      if (offerKind(id) === "synergy") weight += 3;
+      if (offerRarity(state, id) === "forbidden") weight = state.unlocks.forbiddenSlot ? weight + 1 : Math.max(1, weight - 3);
+      if (id === "normal" && state.inventory.normal > 5) weight = 1;
+      return Array.from({ length: Math.max(1, weight) }, () => id);
+    });
+  return shuffle(weighted)[0] || null;
+}
+
+export function generateShopOffers(state: GameState): ShopOffer[] {
+  const pool = shopPool(state);
+  const picked = new Set<string>();
+  const offers: ShopOffer[] = [];
+  const preferredKinds: ShopOffer["kind"][] = ["ordnance", "synergy", state.unlocks.forbiddenSlot ? "risk" : "classified"];
+
+  for (const kind of preferredKinds) {
+    const typedPool = pool.filter((id) => offerKind(id) === kind);
+    const id = weightedPick(typedPool.length ? typedPool : pool, state, picked);
+    if (!id) continue;
+    picked.add(id);
+    const base = offerBase(id);
+    offers.push({
+      uid: `${id}-${Date.now()}-${offers.length}-${Math.random().toString(16).slice(2)}`,
+      itemId: id,
+      label: base.label,
+      price: base.price,
+      rarity: offerRarity(state, id),
+      kind: offerKind(id),
+      note: synergyTargets(state).has(id) ? `[BUILD BIAS] ${base.note}` : base.note,
+    });
+  }
+
+  while (offers.length < 3) {
+    const id = weightedPick(pool, state, picked);
+    if (!id) break;
+    picked.add(id);
+    const base = offerBase(id);
+    offers.push({
+      uid: `${id}-${Date.now()}-${offers.length}-${Math.random().toString(16).slice(2)}`,
+      itemId: id,
+      label: base.label,
+      price: base.price,
+      rarity: offerRarity(state, id),
+      kind: offerKind(id),
+      note: synergyTargets(state).has(id) ? `[BUILD BIAS] ${base.note}` : base.note,
+    });
+  }
+
+  return offers;
+}
+
+export function enterShop(state: GameState): GameState {
+  const unlocks = evaluateUnlocks(state);
+  const withUnlocks = { ...state, unlocks };
+  const unlockLog = [
+    unlocks.blackout && !state.unlocks.blackout ? "> UNLOCK: BLACKOUT directives entered the pool." : "",
+    unlocks.doubleMine && !state.unlocks.doubleMine ? "> UNLOCK: DOUBLE MINE directives entered the pool." : "",
+    unlocks.vortex && !state.unlocks.vortex ? "> UNLOCK: forbidden ordnance entered the pool." : "",
+    unlocks.ghostField && !state.unlocks.ghostField ? "> UNLOCK: GHOST FIELD directives entered the pool." : "",
+    unlocks.forbiddenSlot && !state.unlocks.forbiddenSlot ? "> UNLOCK: forbidden offer slot enabled." : "",
+  ].filter(Boolean);
+  return {
+    ...withUnlocks,
+    screen: "shop",
+    shopRerolls: 0,
+    shopOffers: generateShopOffers(withUnlocks),
+    log: appendLog([...state.log, ...unlockLog], "> SUPPLY DEPOT: three field offers generated."),
+  };
+}
+
 export function shopAvailableDirectiveIds(state: GameState) {
   const owned = new Set<DirectiveId>([
     ...state.inventory.directiveDeck,
@@ -663,6 +942,17 @@ export function shopAvailableDirectiveIds(state: GameState) {
 }
 
 export function canBuyUpgrade(state: GameState, id: string) {
+  const directive = parseDirectiveShopId(id);
+  if (directive) {
+    const base = offerBase(id);
+    return state.stats.coins >= base.price && shopAvailableDirectiveIds(state).includes(directive) && unlockedDirectiveOffer(state, directive);
+  }
+
+  if (id === "time" || id === "scout") {
+    const base = offerBase(id);
+    return state.stats.coins >= base.price && (id !== "scout" || !state.inventory.scout);
+  }
+
   const item = SHOP_ITEMS.find((entry) => entry.id === id);
   if (!item || state.stats.coins < item.price) return false;
 
@@ -671,15 +961,50 @@ export function canBuyUpgrade(state: GameState, id: string) {
   }
 
   if (id in MINE_DEFS) {
-    return MINE_DEFS[id as MineType].unlockedRound <= nextCampaignRound(state);
+    return unlockedMineOffer(state, id as MineType);
   }
 
   return true;
 }
 
 export function buyUpgrade(state: GameState, id: string): GameState {
+  const directive = parseDirectiveShopId(id);
+  if (directive) {
+    const base = offerBase(id);
+    if (!canBuyUpgrade(state, id)) return state;
+    awardAchievement("depot_deal");
+    awardAchievement("classified_unlock");
+    return {
+      ...state,
+      inventory: {
+        ...state.inventory,
+        directiveDeck: [...state.inventory.directiveDeck, directive],
+      },
+      shopOffers: state.shopOffers.filter((offer) => offer.itemId !== id),
+      stats: { ...state.stats, coins: state.stats.coins - base.price },
+      log: appendLog(state.log, `> SUPPLY DEPOT: ${DIRECTIVES[directive].name} purchased for ${base.price}Ȼ.`),
+    };
+  }
+
+  if (id === "time" || id === "scout") {
+    const base = offerBase(id);
+    if (!canBuyUpgrade(state, id)) return state;
+    awardAchievement("depot_deal");
+    const inventory = { ...state.inventory };
+    if (id === "time") inventory.placementSeconds += 5;
+    if (id === "scout") inventory.scout = true;
+    return {
+      ...state,
+      inventory,
+      shopOffers: state.shopOffers.filter((offer) => offer.itemId !== id),
+      stats: { ...state.stats, coins: state.stats.coins - base.price },
+      log: appendLog(state.log, `> SUPPLY DEPOT: ${id} purchased for ${base.price} credits.`),
+    };
+  }
+
   const item = SHOP_ITEMS.find((entry) => entry.id === id);
   if (!item || !canBuyUpgrade(state, id)) return state;
+  awardAchievement("depot_deal");
   const price = item.price;
   const inventory = { ...state.inventory };
 
@@ -698,6 +1023,7 @@ export function buyUpgrade(state: GameState, id: string): GameState {
   return {
     ...state,
     inventory,
+    shopOffers: state.shopOffers.filter((offer) => offer.itemId !== id),
     stats: { ...state.stats, coins: state.stats.coins - price },
     log: appendLog(state.log, `> SHOP: ${id} куплено за ${price} монет.`),
   };

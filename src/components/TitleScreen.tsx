@@ -1,4 +1,4 @@
-import { Play, Settings, Terminal } from "lucide-react";
+import { Medal, Play, Settings, Terminal } from "lucide-react";
 import { AudioToggle } from "./AudioToggle";
 import { MatrixRain } from "./MatrixRain";
 import { TerminalFrame } from "./TerminalFrame";
@@ -18,12 +18,14 @@ export function TitleScreen({
   onStart,
   onHowTo,
   onArsenal,
+  onAchievements,
   muted,
   onAudioToggle,
 }: {
   onStart: () => void;
   onHowTo: () => void;
   onArsenal: () => void;
+  onAchievements: () => void;
   muted: boolean;
   onAudioToggle: () => void;
 }) {
@@ -46,6 +48,9 @@ export function TitleScreen({
           </button>
           <button className="terminal-button" onClick={onArsenal}>
             <Settings size={18} /> АРСЕНАЛ
+          </button>
+          <button className="terminal-button" onClick={onAchievements}>
+            <Medal size={18} /> ДОСТИЖЕНИЯ
           </button>
         </div>
         <p className="prompt-line">
