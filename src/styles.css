@@ -136,6 +136,31 @@ button {
   overflow-wrap: normal;
 }
 
+.ascii-logo--desktop {
+  display: block;
+}
+
+.ascii-logo-mobile {
+  display: none;
+  margin: 0 0 18px;
+  text-align: left;
+}
+
+.ascii-logo-mobile__title {
+  color: var(--green);
+  font-family: "Press Start 2P", var(--font-terminal);
+  font-size: clamp(28px, 8vw, 42px);
+  line-height: 1;
+  text-shadow: 0 0 16px rgba(0, 255, 65, 0.75);
+  margin-bottom: 12px;
+}
+
+.ascii-logo-mobile__tagline {
+  color: #9effb6;
+  font-size: 18px;
+  line-height: 1.1;
+}
+
 .tagline,
 .big-line {
   color: var(--yellow);
@@ -1079,11 +1104,16 @@ button {
     padding: 14px;
   }
 
-  .ascii-logo {
-    min-height: auto;
-    font-size: clamp(7px, 2vw, 10px);
-    line-height: 1.08;
-    text-align: left;
+  .ascii-logo--desktop {
+    display: none;
+  }
+
+  .ascii-logo-mobile {
+    display: block;
+  }
+
+  .menu-stack {
+    max-width: 100%;
   }
 
   .briefing-grid,
@@ -1122,6 +1152,36 @@ button {
     right: 10px;
     width: 44px;
     height: 44px;
+  }
+}
+
+@media (max-width: 420px) {
+  .screen {
+    padding: 10px;
+  }
+
+  .terminal-frame {
+    padding: 12px;
+  }
+
+  .terminal-title {
+    margin-bottom: 12px;
+    padding-right: 48px;
+    font-size: 20px;
+  }
+
+  .ascii-logo-mobile__title {
+    font-size: 30px;
+  }
+
+  .ascii-logo-mobile__tagline {
+    font-size: 16px;
+  }
+
+  .terminal-button {
+    min-height: 48px;
+    padding: 10px 12px;
+    font-size: 18px;
   }
 }
 

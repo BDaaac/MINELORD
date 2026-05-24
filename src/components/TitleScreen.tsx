@@ -31,7 +31,12 @@ export function TitleScreen({
     <main className="screen title-screen">
       <MatrixRain />
       <TerminalFrame title="> MINELORD v1.0" action={<AudioToggle muted={muted} onToggle={onAudioToggle} />}>
-        <pre className="ascii-logo">{logo}</pre>
+        <pre className="ascii-logo ascii-logo--desktop">{logo}</pre>
+        <div className="ascii-logo-mobile" aria-label="MINELORD">
+          <div className="ascii-logo-mobile__title">MINELORD</div>
+          <div className="ascii-logo-mobile__tagline">Think like a Sapper.</div>
+          <div className="ascii-logo-mobile__tagline">Play like a Villain.</div>
+        </div>
         <div className="menu-stack">
           <button className="terminal-button terminal-button--primary" onClick={onStart}>
             <Play size={18} /> НАЧАТЬ ИГРУ
