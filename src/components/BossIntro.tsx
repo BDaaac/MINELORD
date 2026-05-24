@@ -26,7 +26,15 @@ const bossWeakness: Partial<Record<AiType, string>> = {
   "The Machine": "Phantom и Mirror скрывают информацию от логики",
 };
 
-export function BossIntro({ ai, onContinue }: { ai: AiType; onContinue: () => void }) {
+export function BossIntro({
+  ai,
+  onContinue,
+  onBack,
+}: {
+  ai: AiType;
+  onContinue: () => void;
+  onBack: () => void;
+}) {
   const abilities = bossAbilities[ai] ?? [AI_LABELS[ai]];
   const weakness = bossWeakness[ai];
 
@@ -45,9 +53,14 @@ export function BossIntro({ ai, onContinue }: { ai: AiType; onContinue: () => vo
             {abilities.map((ability) => <span key={ability}>{ability}</span>)}
           </div>
           {weakness ? <p className="boss-weakness">&gt; СЛАБОСТЬ: {weakness}</p> : null}
-          <button className="terminal-button terminal-button--danger" onClick={onContinue}>
-            <Play size={18} /> ПОДГОТОВИТЬ МИНЫ
-          </button>
+          <div className="menu-row">
+            <button className="terminal-button terminal-button--danger" onClick={onContinue}>
+              <Play size={18} /> ПОДГОТОВИТЬ МИНЫ
+            </button>
+            <button className="terminal-button" onClick={onBack}>
+              НАЗАД
+            </button>
+          </div>
         </div>
       </TerminalFrame>
     </main>

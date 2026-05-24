@@ -7,10 +7,12 @@ export function DirectiveSelect({
   round,
   choices,
   onPick,
+  onBack,
 }: {
   round: number;
   choices: DirectiveId[];
   onPick: (directive: DirectiveId) => void;
+  onBack: () => void;
 }) {
   const [selected, setSelected] = useState<DirectiveId | null>(null);
 
@@ -36,13 +38,16 @@ export function DirectiveSelect({
             );
           })}
         </div>
-        <div className="directive-confirm-row">
+        <div className="menu-row directive-confirm-row">
           <button
             className="terminal-button terminal-button--primary"
             disabled={!selected}
             onClick={() => selected && onPick(selected)}
           >
             ПРИНЯТЬ ДИРЕКТИВУ{selected ? `: ${DIRECTIVES[selected].name}` : ""}
+          </button>
+          <button className="terminal-button" onClick={onBack}>
+            НАЗАД
           </button>
         </div>
       </TerminalFrame>

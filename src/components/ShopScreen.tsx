@@ -73,10 +73,12 @@ export function ShopScreen({
   state,
   onBuy,
   onContinue,
+  onBack,
 }: {
   state: GameState;
   onBuy: (id: string) => void;
   onContinue: () => void;
+  onBack: () => void;
 }) {
   const [selectedItemId, setSelectedItemId] = useState<ShopItemId | null>(null);
 
@@ -128,9 +130,14 @@ export function ShopScreen({
           </p>
           <p>ДИРЕКТИВЫ: {state.inventory.directiveDeck.map((id) => DIRECTIVES[id].name).join(" / ")}</p>
         </div>
-        <button className="terminal-button terminal-button--primary" onClick={onContinue}>
-          <Coins size={18} /> К СЛЕДУЮЩЕМУ РАУНДУ
-        </button>
+        <div className="menu-row">
+          <button className="terminal-button terminal-button--primary" onClick={onContinue}>
+            <Coins size={18} /> К СЛЕДУЮЩЕМУ РАУНДУ
+          </button>
+          <button className="terminal-button" onClick={onBack}>
+            НАЗАД
+          </button>
+        </div>
       </TerminalFrame>
 
       {selectedItemId ? (

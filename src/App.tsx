@@ -142,6 +142,7 @@ export function App() {
         <DirectiveSelect
           choices={state.directiveChoices}
           round={state.config.round}
+          onBack={() => setState((current) => ({ ...current, screen: "title" }))}
           onPick={(directive) => setState((current) => beginPlacement(current, directive))}
         />
       </>
@@ -152,10 +153,14 @@ export function App() {
     return (
       <>
         <AudioToggle muted={audio.muted} onToggle={audio.toggleMuted} />
-        <BossIntro ai={state.config.ai} onContinue={() => {
-          audio.armAndPlay();
-          setState(afterBossIntro);
-        }} />
+        <BossIntro
+          ai={state.config.ai}
+          onBack={() => setState((current) => ({ ...current, screen: "directive" }))}
+          onContinue={() => {
+            audio.armAndPlay();
+            setState(afterBossIntro);
+          }}
+        />
       </>
     );
   }
@@ -166,6 +171,10 @@ export function App() {
         <AudioToggle muted={audio.muted} onToggle={audio.toggleMuted} />
         <PlacementScreen
           state={state}
+          onBack={() => setState((current) => ({
+            ...current,
+            screen: current.config.boss ? "boss" : "directive",
+          }))}
           onCellClick={(row, col) => setState((current) => toggleMine(current, row, col))}
           onMineSelect={(type: MineType) => setState((current) => ({ ...current, selectedMine: type }))}
           onStart={() => {
@@ -233,6 +242,7 @@ export function App() {
         <AudioToggle muted={audio.muted} onToggle={audio.toggleMuted} />
         <ShopScreen
           state={state}
+          onBack={() => setState((current) => ({ ...current, screen: "result" }))}
           onBuy={(id) => setState((current) => buyUpgrade(current, id))}
           onContinue={() => {
             audio.armAndPlay();

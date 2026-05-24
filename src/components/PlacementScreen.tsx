@@ -10,11 +10,13 @@ export function PlacementScreen({
   onCellClick,
   onMineSelect,
   onStart,
+  onBack,
 }: {
   state: GameState;
   onCellClick: (row: number, col: number) => void;
   onMineSelect: (type: MineType) => void;
   onStart: () => void;
+  onBack: () => void;
 }) {
   const canStart = state.mines.filter((mine) => mine.type !== "decoy").length > 0;
   const mineTypes = unlockedMines(state.config.round);
@@ -79,9 +81,14 @@ export function PlacementScreen({
 
         <div className="footer-help">
           <span>Тап по клетке: поставить или убрать {MINE_DEFS[state.selectedMine].name}</span>
-          <button className="terminal-button terminal-button--primary" disabled={!canStart} onClick={onStart}>
-            <Play size={18} /> ЗАПУСТИТЬ САПЕРА
-          </button>
+          <div className="menu-row">
+            <button className="terminal-button terminal-button--primary" disabled={!canStart} onClick={onStart}>
+              <Play size={18} /> ЗАПУСТИТЬ САПЕРА
+            </button>
+            <button className="terminal-button" onClick={onBack}>
+              НАЗАД
+            </button>
+          </div>
         </div>
       </TerminalFrame>
     </main>
